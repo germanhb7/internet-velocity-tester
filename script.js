@@ -125,20 +125,18 @@ async function fetchConnectionData() {
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
     try {
-        // ✅ API IPINFO (funciona en todo el mundo y sin CORS)
-        const res = await fetch('https://api.ipinfo.io/json?token=e5543e4ad9a546');
+        // ✅ API ipapi.co sin token, funciona directo en navegador
+        const res = await fetch('https://ipapi.co/json/');
         const data = await res.json();
 
         ipElement.textContent = data.ip || 'No disponible';
         ispElement.textContent = data.org || 'No disponible';
         cityElement.textContent = data.city || 'No disponible';
-        countryElement.textContent = data.country || 'No disponible';
+        countryElement.textContent = data.country_name || 'No disponible';
 
-        // ASN viene dentro de org tipo "AS28015 MERCO COMUNICACIONES"
-        const asnMatch = data.org?.match(/AS\d+/);
-        asnElement.textContent = asnMatch ? asnMatch[0] : 'No disponible';
+        asnElement.textContent = data.asn || 'No disponible';
 
-        userCountry = data.country || 'No disponible';
+        userCountry = data.country_name || 'No disponible';
         userISP = data.org || 'No disponible';
 
     } catch (error) {
@@ -151,17 +149,6 @@ async function fetchConnectionData() {
 
     const ispResult = document.getElementById('isp-result');
     if (ispResult) ispResult.textContent = userISP;
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-        return await fetch(url, { ...options, signal: controller.signal });
-    } finally {
-        clearTimeout(timeout);
-    }
 }
 
 async function measureDownload() {
