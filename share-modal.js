@@ -53,7 +53,7 @@ async function copyShareSummary() {
 
 function initShareModal() {
     const openButton = document.getElementById('share-btn');
-    const closeButton = document.getElementById('close-share');
+    const closeButton = document.getElementById('share-close-btn');
     const copyButton = document.getElementById('share-copy-btn');
     const modal = document.getElementById('share-modal');
 
