@@ -122,60 +122,35 @@ async function fetchConnectionData() {
     const countryElement = document.getElementById('country');
     const asnElement = document.getElementById('asn');
 
-    if (!ipElement) return;
-
-    function setData(ip='-', isp='-', city='-', country='-', asn='-') {
-        if (ipElement) ipElement.textContent = ip;
-        if (ispElement) ispElement.textContent = isp;
-        if (cityElement) cityElement.textContent = city;
-        if (countryElement) countryElement.textContent = country;
-        if (asnElement) asnElement.textContent = asn;
-
-        userCountry = country;
-        userISP = isp;
-
-        const ispResult = document.getElementById('isp-result');
-        if (ispResult) ispResult.textContent = isp;
-    }
+    if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
     try {
-        // 1️⃣ IP segura
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-        const ip = ipData.ip;
-
-        // 2️⃣ Datos ISP sin CORS
-        const infoRes = await fetch(`https://ipapi.is/${ip}`);
-        const info = await infoRes.json();
-
-        setData(
-            ip,
-            info.company || info.connection?.isp || '-',
-            info.city || '-',
-            info.country || '-',
-            info.asn || info.connection?.asn || '-'
-        );
-
-        return;
-
-    } catch {}
-
-    try {
-        // Backup
-        const res = await fetch('https://ipwho.is/');
+        // ✅ API IPINFO (funciona en todo el mundo y sin CORS)
+        const res = await fetch('https://api.ipinfo.io/json?token=e5543e4ad9a546');
         const data = await res.json();
 
-        setData(
-            data.ip,
-            data.connection?.isp,
-            data.city,
-            data.country,
-            data.connection?.asn
-        );
+        ipElement.textContent = data.ip || 'No disponible';
+        ispElement.textContent = data.org || 'No disponible';
+        cityElement.textContent = data.city || 'No disponible';
+        countryElement.textContent = data.country || 'No disponible';
 
-    } catch {
-        setData();
+        // ASN viene dentro de org tipo "AS28015 MERCO COMUNICACIONES"
+        const asnMatch = data.org?.match(/AS\d+/);
+        asnElement.textContent = asnMatch ? asnMatch[0] : 'No disponible';
+
+        userCountry = data.country || 'No disponible';
+        userISP = data.org || 'No disponible';
+
+    } catch (error) {
+        ipElement.textContent = 'No disponible';
+        ispElement.textContent = 'No disponible';
+        cityElement.textContent = 'No disponible';
+        countryElement.textContent = 'No disponible';
+        asnElement.textContent = 'No disponible';
     }
+
+    const ispResult = document.getElementById('isp-result');
+    if (ispResult) ispResult.textContent = userISP;
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
