@@ -20,6 +20,7 @@
 
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
+    <script src="share-modal.js" defer></script>
 </head>
 <body>
     <header>
@@ -107,6 +108,7 @@
             </div>
 
             <button id="copy-result" class="secondary-btn">COPIAR RESULTADO PARA ENTREVISTA</button>
+            <button id="share-btn" class="secondary-btn">Compartir resultado</button>
         </section>
 
         <section id="history-section">
@@ -121,6 +123,17 @@
             <p>Contacto: <a class="contact-link" href="mailto:germanbarreto77@gmail.com">germanbarreto77@gmail.com</a></p>
         </section>
     </main>
+
+    <div id="share-modal" class="share-modal" aria-hidden="true" role="dialog" aria-labelledby="share-title">
+        <div class="share-modal-content">
+            <h3 id="share-title">Compartir resultado</h3>
+            <p id="share-summary">Generá o copiá un resumen rápido para compartir.</p>
+            <div class="share-actions">
+                <button id="share-copy-btn" class="secondary-btn">Copiar resumen</button>
+                <button id="share-close-btn" class="secondary-btn">Cerrar</button>
+            </div>
+        </div>
+    </div>
 
     <footer>
         <p>&copy; 2026 Internet Velocity Tester - Hecho para todos los usuarios</p>

@@ -311,3 +311,48 @@ footer {
         font-size: 1.7rem;
     }
 }
+
+#share-btn {
+    margin-top: 0.7rem;
+}
+
+.share-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 1rem;
+}
+
+.share-modal.is-open {
+    display: flex;
+}
+
+.share-modal-content {
+    background: #fff;
+    width: min(520px, 100%);
+    border-radius: 14px;
+    padding: 1.1rem;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.share-modal-content h3 {
+    color: var(--primary);
+    margin-bottom: 0.4rem;
+}
+
+.share-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+    .share-actions {
+        grid-template-columns: 1fr;
+    }
+}
