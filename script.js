@@ -161,6 +161,15 @@ async function measureDownload() {
         if (samples.length >= DOWNLOAD_ITERATIONS) {
             break;
         }
+
+        if (samples.length >= DOWNLOAD_ITERATIONS) {
+            break;
+        }
+        await response.arrayBuffer();
+        const duration = (performance.now() - start) / 1000;
+        totalBits += KNOWN_FILE_SIZE_BYTES * 8;
+        totalTimeSeconds += duration;
+        samples.push((KNOWN_FILE_SIZE_BYTES * 8) / duration / 1000000);
     }
 
     if (!samples.length) {
@@ -261,6 +270,47 @@ function renderHistory() {
         historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
         return;
     }
+}
+
+    historyList.innerHTML = current
+        .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
+        .join('');
+}
+
+async function copyResultToClipboard() {
+    const download = document.getElementById('download').textContent;
+    const upload = document.getElementById('upload').textContent;
+    const ping = document.getElementById('ping').textContent;
+    const now = new Date();
+    const date = now.toLocaleDateString('es-AR');
+
+    const text = [
+        'Internet Speed Result',
+        `Download: ${download} Mbps`,
+        `Upload: ${upload} Mbps`,
+        `Ping: ${ping} ms`,
+        `Fecha: ${date}`,
+        `País: ${userCountry}`
+    ].join('\n');
+
+    await navigator.clipboard.writeText(text);
+}
+
+function toggleInterviewMode(forceMode = null) {
+    isInterviewMode = typeof forceMode === 'boolean' ? forceMode : !isInterviewMode;
+    document.body.classList.toggle('interview-mode', isInterviewMode);
+
+    const toggleButton = document.getElementById('interview-mode-toggle');
+    const backHomeButton = document.getElementById('back-home');
+
+    toggleButton.classList.toggle('active', isInterviewMode);
+    toggleButton.textContent = isInterviewMode ? 'Salir de modo entrevista' : 'Modo entrevista';
+    backHomeButton.hidden = !isInterviewMode;
+
+    if (isInterviewMode) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
 
     historyList.innerHTML = current
         .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
