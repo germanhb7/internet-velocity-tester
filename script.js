@@ -124,81 +124,62 @@ async function fetchConnectionData() {
 
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
-    function setData(ip, isp, city, country, asn) {
-        ipElement.textContent = ip || 'No disponible';
-        ispElement.textContent = isp || 'No disponible';
-        cityElement.textContent = city || 'No disponible';
-        countryElement.textContent = country || 'No disponible';
-        asnElement.textContent = asn || 'No disponible';
+    function setData({ ip, isp, city, country, asn }) {
+        ipElement.textContent = ip || '-';
+        ispElement.textContent = isp || '-';
+        cityElement.textContent = city || '-';
+        countryElement.textContent = country || '-';
+        asnElement.textContent = asn || '-';
 
-        userCountry = country || 'No disponible';
-        userISP = isp || 'No disponible';
+        userCountry = country || '-';
+        userISP = isp || '-';
 
         const ispResult = document.getElementById('isp-result');
         if (ispResult) ispResult.textContent = userISP;
     }
 
-    async function fetchWithTimeout(url, timeout = 6000) {
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), timeout);
-        try {
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(id);
-            return res;
-        } catch (e) {
-            clearTimeout(id);
-            throw e;
-        }
-    }
-
     try {
-        // ---------- API 1 ----------
-        const res = await fetchWithTimeout(
-            'https://ipwho.is/?fields=ip,city,country,connection'
-        );
+        // 🔹 API PRINCIPAL
+        const res = await fetch('https://ipwho.is/?fields=ip,city,country,connection');
         const data = await res.json();
 
-        if (data && data.ip) {
-            setData(
-                data.ip,
-                data.connection?.isp,
-                data.city,
-                data.country,
-                data.connection?.asn
-            );
+        if (data.success) {
+            setData({
+                ip: data.ip,
+                isp: data.connection?.isp,
+                city: data.city,
+                country: data.country,
+                asn: data.connection?.asn
+            });
             return;
         }
-        throw new Error('ipwho.is fallo');
+
+    } catch {}
+
+    try {
+        // 🔹 FALLBACK 1
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+
+        setData({
+            ip: data.ip,
+            isp: data.org,
+            city: data.city,
+            country: data.country_name,
+            asn: data.asn
+        });
+        return;
+
+    } catch {}
+
+    try {
+        // 🔹 FALLBACK 2 solo IP
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        setData({ ip: data.ip });
 
     } catch {
-        try {
-            // ---------- API 2 ----------
-            const res = await fetchWithTimeout('https://ipapi.co/json/');
-            const data = await res.json();
-
-            if (data && data.ip) {
-                setData(
-                    data.ip,
-                    data.org,
-                    data.city,
-                    data.country_name,
-                    data.asn
-                );
-                return;
-            }
-            throw new Error('ipapi fallo');
-
-        } catch {
-            try {
-                // ---------- API 3 ----------
-                const res = await fetchWithTimeout('https://api.ipify.org?format=json');
-                const data = await res.json();
-
-                setData(data.ip, '-', '-', '-', '-');
-            } catch {
-                setData('-', '-', '-', '-', '-');
-            }
-        }
+        setData({});
     }
 }
 
