@@ -29,6 +29,23 @@ function formatNumber(value, decimals = 2) {
     return Number.isFinite(value) ? value.toFixed(decimals) : '0.00';
 }
 
+
+function safeReadHistory() {
+    try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function safeWriteHistory(items) {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    } catch {
+        // Ignorar error si el storage está bloqueado por el navegador.
+    }
+}
+
 function getConnectionApproximation() {
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (!connection || !Number.isFinite(connection.downlink)) {
@@ -144,6 +161,10 @@ async function measureDownload() {
         if (samples.length >= DOWNLOAD_ITERATIONS) {
             break;
         }
+
+        if (samples.length >= DOWNLOAD_ITERATIONS) {
+            break;
+        }
         await response.arrayBuffer();
         const duration = (performance.now() - start) / 1000;
         totalBits += KNOWN_FILE_SIZE_BYTES * 8;
@@ -234,16 +255,16 @@ function updateGauge(downloadMbps) {
 }
 
 function saveHistory(result) {
-    const current = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const current = safeReadHistory();
     current.unshift(result);
     const trimmed = current.slice(0, 5);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+    safeWriteHistory(trimmed);
     renderHistory();
 }
 
 function renderHistory() {
     const historyList = document.getElementById('history-list');
-    const current = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const current = safeReadHistory();
 
     if (!current.length) {
         historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
@@ -273,6 +294,56 @@ async function copyResultToClipboard() {
     ].join('\n');
 
     await navigator.clipboard.writeText(text);
+}
+
+function toggleInterviewMode(forceMode = null) {
+    isInterviewMode = typeof forceMode === 'boolean' ? forceMode : !isInterviewMode;
+    document.body.classList.toggle('interview-mode', isInterviewMode);
+
+    const toggleButton = document.getElementById('interview-mode-toggle');
+    const backHomeButton = document.getElementById('back-home');
+
+    toggleButton.classList.toggle('active', isInterviewMode);
+    toggleButton.textContent = isInterviewMode ? 'Salir de modo entrevista' : 'Modo entrevista';
+    backHomeButton.hidden = !isInterviewMode;
+
+    if (isInterviewMode) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+    historyList.innerHTML = current
+        .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
+        .join('');
+}
+
+async function copyResultToClipboard() {
+    const download = document.getElementById('download').textContent;
+    const upload = document.getElementById('upload').textContent;
+    const ping = document.getElementById('ping').textContent;
+    const now = new Date();
+    const date = now.toLocaleDateString('es-AR');
+
+    const text = [
+        'Internet Speed Result',
+        `Download: ${download} Mbps`,
+        `Upload: ${upload} Mbps`,
+        `Ping: ${ping} ms`,
+        `Fecha: ${date}`,
+        `País: ${userCountry}`
+    ].join('\n');
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
 }
 
 function toggleInterviewMode(forceMode = null) {
@@ -394,10 +465,19 @@ async function runSpeedTest() {
 }
 
 function initEvents() {
-    document.getElementById('start-test').addEventListener('click', runSpeedTest);
-    document.getElementById('interview-mode-toggle').addEventListener('click', () => toggleInterviewMode());
-    document.getElementById('back-home').addEventListener('click', () => toggleInterviewMode(false));
-    document.getElementById('copy-result').addEventListener('click', async () => {
+    const startBtn = document.getElementById('start-test');
+    const interviewBtn = document.getElementById('interview-mode-toggle');
+    const backBtn = document.getElementById('back-home');
+    const copyBtn = document.getElementById('copy-result');
+
+    if (!startBtn || !interviewBtn || !backBtn || !copyBtn) {
+        return;
+    }
+
+    startBtn.addEventListener('click', runSpeedTest);
+    interviewBtn.addEventListener('click', () => toggleInterviewMode());
+    backBtn.addEventListener('click', () => toggleInterviewMode(false));
+    copyBtn.addEventListener('click', async () => {
         try {
             await copyResultToClipboard();
             const button = document.getElementById('copy-result');
