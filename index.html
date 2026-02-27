@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet Velocity Tester - Test de Velocidad de Internet Gratis</title>
+    <meta name="description" content="Mide tu velocidad de internet en Concordia, Entre Ríos. Detecta IP, ISP automáticamente y prueba descarga/subida.">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Internet Velocity Tester</h1>
+        <p>Testea tu velocidad de internet de forma gratuita y precisa</p>
+    </header>
+
+    <main>
+        <section id="info-section">
+            <h2>Información de tu conexión</h2>
+            <p>Tu IP: <span id="ip">Cargando...</span></p>
+            <p>Tu proveedor (ISP): <span id="isp">Cargando...</span></p>
+            <p>Ubicación aproximada: <span id="location">Cargando...</span></p>
+        </section>
+
+        <section id="test-section">
+            <h2>Prueba de velocidad</h2>
+            <button id="start-test">INICIAR TEST</button>
+            <div id="results">
+                <p>Ping: <span id="ping">---</span> ms</p>
+                <p>Descarga: <span id="download">---</span> Mbps</p>
+                <p>Subida: <span id="upload">---</span> Mbps</p>
+            </div>
+        </section>
+
+        <section id="premium-teaser">
+            <h2>¿Querés más velocidad?</h2>
+            <p>Accedé a consejos premium para optimizar tu Windows y sacar el máximo de tu conexión.</p>
+            <button>Ver consejos premium (próximamente)</button>
+        </section>
+
+        <div id="loading-animation" style="display: none; text-align: center; margin: 2rem 0;">
+    <div class="rocket-container">
+        <div class="rocket">🚀</div>
+        <div class="flame">🔥</div>
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+        <p id="loading-text">Probando tu velocidad... ¡Despegue!</p>
+    </div>
+</div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Internet Velocity Tester - Hecho para usuarios de Concordia, Entre Ríos, Argentina</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
