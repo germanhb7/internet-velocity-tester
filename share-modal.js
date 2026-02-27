@@ -37,9 +37,8 @@ function closeShareModal() {
 
 async function copyShareSummary() {
     const text = buildShareText();
-
     try {
-        if (navigator.clipboard?.writeText) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(text);
         } else {
             const area = document.createElement('textarea');
@@ -49,8 +48,8 @@ async function copyShareSummary() {
             document.execCommand('copy');
             document.body.removeChild(area);
         }
-    } catch {
-        alert("No se pudo copiar el texto");
+    } catch (err) {
+        console.error('Error al copiar:', err);
     }
 }
 
@@ -60,25 +59,35 @@ function initShareModal() {
     const copyButton = document.getElementById('share-copy-btn');
     const modal = document.getElementById('share-modal');
 
-    if (openButton) openButton.onclick = openShareModal;
-    if (closeButton) closeButton.onclick = closeShareModal;
+    if (openButton) {
+        openButton.addEventListener('click', openShareModal);
+    }
+
+    if (closeButton) {
+        closeButton.addEventListener('click', closeShareModal);
+    }
 
     if (copyButton) {
-        copyButton.onclick = async () => {
-            await copyShareSummary();
-            copyButton.textContent = 'Copiado ✅';
-            setTimeout(() => {
-                copyButton.textContent = 'Copiar resumen';
-            }, 1200);
-        };
+        copyButton.addEventListener('click', async () => {
+            try {
+                await copyShareSummary();
+                copyButton.textContent = 'Copiado ✅';
+                setTimeout(() => {
+                    copyButton.textContent = 'Copiar resumen';
+                }, 1200);
+            } catch {
+                copyButton.textContent = 'No se pudo copiar';
+            }
+        });
     }
 
     if (modal) {
-        modal.onclick = (event) => {
-            if (event.target === modal) closeShareModal();
-        };
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeShareModal();
+            }
+        });
     }
 }
 
-// Esperar SIEMPRE a que cargue el HTML
-window.addEventListener('load', initShareModal);
+document.addEventListener('DOMContentLoaded', initShareModal);
