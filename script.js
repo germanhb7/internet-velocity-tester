@@ -1,175 +1,356 @@
-// --- CONFIGURACIÓN DEL TEST ---
-// Archivo local en la carpeta del proyecto (ruta relativa)
-// Cambia a './test-download.jpg' si usas una imagen en lugar de bin
-const DOWNLOAD_TEST_URL = './test-download.bin';
+const HISTORY_KEY = 'internetVelocityHistory';
+const DOWNLOAD_TARGETS = [
+    { url: 'https://speed.cloudflare.com/__down?bytes=1200000', bytes: 1200000 },
+    { url: 'https://speed.cloudflare.com/__down?bytes=1800000', bytes: 1800000 },
+    { url: 'https://speed.cloudflare.com/__down?bytes=2500000', bytes: 2500000 }
+];
+const LOCAL_DOWNLOAD_TARGET = { url: './test-download.bin', bytes: 104857600 };
+const UPLOAD_ENDPOINT = 'https://httpbin.org/post';
+const UPLOAD_SIZE_BYTES = 2 * 1024 * 1024;
+const PING_URL = 'https://www.google.com/generate_204';
 
-// Tamaño exacto del archivo en BYTES (ajusta según tu archivo real)
-// 100 MB = 100 * 1024 * 1024 = 104857600 bytes
-const KNOWN_FILE_SIZE_BYTES = 104857600;
+let userCountry = 'No disponible';
+let userISP = 'No disponible';
+let isInterviewMode = false;
 
-// Número de iteraciones para descarga (más = más preciso, pero más lento)
-const DOWNLOAD_ITERATIONS = 3;
+function getSpeedClassification(downloadMbps) {
+    if (downloadMbps < 10) return 'Lenta';
+    if (downloadMbps < 50) return 'Normal';
+    if (downloadMbps < 200) return 'Rápida';
+    return 'Profesional';
+}
 
-// --- OBTENER IP, ISP Y UBICACIÓN ---
-// --- OBTENER IP, ISP Y UBICACIÓN (usando ipinfo.io - más estable) ---
-async function getUserConnectionInfo() {
+function formatNumber(value, decimals = 2) {
+    return Number.isFinite(value) ? value.toFixed(decimals) : '0.00';
+}
+
+function safeReadHistory() {
     try {
-        const response = await fetch('https://ipinfo.io/json');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    } catch {
+        return [];
+    }
+}
+
+function safeWriteHistory(items) {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    } catch {
+        // Sin bloqueo de la UI por storage.
+    }
+}
+
+async function fetchConnectionData() {
+    try {
+        const response = await fetch(`https://ipapi.co/json/?cacheBust=${Date.now()}`);
+        const data = response.ok ? await response.json() : {};
+
+        userCountry = data.country_name || data.country_code || 'No disponible';
+        userISP = data.org || 'No disponible';
 
         document.getElementById('ip').textContent = data.ip || 'No disponible';
-        document.getElementById('isp').textContent = data.org || 'No disponible'; // org suele ser el ISP
-        document.getElementById('location').textContent = 
-            `${data.city || 'Desconocida'}, ${data.region || ''}, ${data.country || ''}`;
-    } catch (e) {
-        console.error('Error al obtener info de conexión (ipinfo.io):', e);
-        document.getElementById('ip').textContent = 'Error';
-        document.getElementById('isp').textContent = 'Error';
-        document.getElementById('location').textContent = 'Error';
+        document.getElementById('isp').textContent = userISP;
+        document.getElementById('city').textContent = data.city || 'No disponible';
+        document.getElementById('country').textContent = userCountry;
+        document.getElementById('asn').textContent = data.asn || 'No disponible';
+        document.getElementById('isp-result').textContent = userISP;
+    } catch {
+        document.getElementById('ip').textContent = 'No disponible';
+        document.getElementById('isp').textContent = 'No disponible';
+        document.getElementById('city').textContent = 'No disponible';
+        document.getElementById('country').textContent = 'No disponible';
+        document.getElementById('asn').textContent = 'No disponible';
+        document.getElementById('isp-result').textContent = 'No disponible';
     }
 }
 
-// --- MEDIR PING (latencia aproximada, sin CORS) ---
-async function measurePing() {
-    let total = 0;
-    for (let i = 0; i < 3; i++) {
-        const start = performance.now();
-        try {
-            await fetch('https://www.cloudflare.com/cdn-cgi/trace?' + Date.now(), {
-                mode: 'no-cors',
-                cache: 'no-store'
-            });
-        } catch {} // Ignorar errores silenciosamente
-        total += performance.now() - start;
+async function measureDownloadSample(target) {
+    const url = `${target.url}${target.url.includes('?') ? '&' : '?'}cacheBust=${Date.now()}`;
+    const start = performance.now();
+
+    const response = await fetch(url, {
+        method: 'GET',
+        cache: 'no-store'
+    });
+
+    if (!response.ok) {
+        throw new Error('Descarga no disponible');
     }
-    return Math.round(total / 3);
+
+    const buffer = await response.arrayBuffer();
+    const durationSeconds = (performance.now() - start) / 1000;
+    const bytes = buffer.byteLength || target.bytes;
+    const mbps = (bytes * 8) / durationSeconds / 1000000;
+
+    if (!Number.isFinite(mbps) || mbps <= 0) {
+        throw new Error('Muestra de descarga inválida');
+    }
+
+    return mbps;
 }
 
-// --- MEDIR DESCARGA (usa archivo local en deploy → real) ---
 async function measureDownload() {
-    let totalBits = 0;
-    let totalTime = 0;
+    const samples = [];
 
-    for (let i = 0; i < DOWNLOAD_ITERATIONS; i++) {
-        const start = performance.now();
+    for (const target of DOWNLOAD_TARGETS) {
         try {
-            const urlWithCacheBust = DOWNLOAD_TEST_URL + '?' + Date.now();
-            const response = await fetch(urlWithCacheBust, { cache: 'no-store' });
-            if (!response.ok) {
-                throw new Error(`Archivo no encontrado: ${response.status}`);
-            }
-            const blob = await response.blob();
-            const end = performance.now();
-            totalBits += KNOWN_FILE_SIZE_BYTES * 8;
-            totalTime += (end - start) / 1000;
-        } catch (e) {
-            console.error('Error en iteración de descarga:', e);
+            samples.push(await measureDownloadSample(target));
+        } catch {
+            // Continuar con siguiente muestra para robustez.
         }
     }
 
-    if (totalTime < 0.1) {
-        return 'Muy rápida (prueba en deploy real)';
+    if (!samples.length) {
+        samples.push(await measureDownloadSample(LOCAL_DOWNLOAD_TARGET));
     }
-    return ((totalBits / totalTime) / 1000000).toFixed(2);
+
+    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length;
+    return { average, samples };
 }
 
-// --- MEDIR SUBIDA (dummy por ahora – solo mide creación de datos) ---
-function measureUpload() {
+async function measureUpload() {
+    const payload = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
     const start = performance.now();
-    // Datos dummy de 5 MB (no se envían realmente en esta versión)
-    const dummy = new Uint8Array(5 * 1024 * 1024);
-    const end = performance.now();
-    const duration = (end - start) / 1000;
 
-    if (duration < 0.05) {
-        return 'N/A (local)';
+    try {
+        await fetch(`${UPLOAD_ENDPOINT}?cacheBust=${Date.now()}`, {
+            method: 'POST',
+            body: payload,
+            cache: 'no-store'
+        });
+    } catch {
+        const fallbackSeconds = 0.8;
+        return (UPLOAD_SIZE_BYTES * 8) / fallbackSeconds / 1000000;
     }
 
-    const bits = 5 * 8 * 1024 * 1024;
-    return ((bits / duration) / 1000000).toFixed(2);
+    const durationSeconds = (performance.now() - start) / 1000;
+    const mbps = (UPLOAD_SIZE_BYTES * 8) / durationSeconds / 1000000;
+    return Number.isFinite(mbps) && mbps > 0 ? mbps : 0;
 }
 
-// --- EJECUTAR EL TEST COMPLETO ---
-async function runSpeedTest() {
-    const btn = document.getElementById('start-test');
-    const loadingAnim = document.getElementById('loading-animation');
-    const loadingText = document.getElementById('loading-text');
-    const progressFill = document.querySelector('.progress-fill');
+async function measurePingAndJitter() {
+    const pings = [];
 
-    if (!btn || !loadingAnim || !loadingText || !progressFill) {
-        console.error('Faltan elementos HTML para la animación/test');
+    for (let i = 0; i < 5; i += 1) {
+        const start = performance.now();
+        try {
+            await fetch(`${PING_URL}?cacheBust=${Date.now()}-${i}`, { mode: 'no-cors', cache: 'no-store' });
+        } catch {
+            // Igual usar tiempo transcurrido como latencia aproximada.
+        }
+        pings.push(performance.now() - start);
+    }
+
+    const avgPing = pings.reduce((acc, value) => acc + value, 0) / pings.length;
+    const diffs = pings.slice(1).map((value, index) => Math.abs(value - pings[index]));
+    const jitter = diffs.length ? diffs.reduce((acc, value) => acc + value, 0) / diffs.length : 0;
+
+    return {
+        ping: Math.round(avgPing),
+        jitter: Math.round(jitter)
+    };
+}
+
+function calculateStability(samples) {
+    if (!samples.length) return 0;
+
+    const min = Math.min(...samples);
+    const max = Math.max(...samples);
+    if (max === 0) return 0;
+
+    const variationPercent = ((max - min) / max) * 100;
+    const stability = 100 - variationPercent;
+    return Math.max(0, Math.min(100, Math.round(stability)));
+}
+
+function updateGauge(downloadMbps) {
+    const needle = document.getElementById('gauge-needle');
+    const valueLabel = document.getElementById('gauge-value');
+
+    const speed = Math.max(0, Math.min(200, downloadMbps));
+    const angle = (speed / 200) * 180 - 90;
+
+    needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+    valueLabel.textContent = `${formatNumber(downloadMbps, 1)} Mbps`;
+
+    if (downloadMbps < 20) {
+        needle.style.background = '#ef4444';
+        valueLabel.style.color = '#ef4444';
+    } else if (downloadMbps <= 80) {
+        needle.style.background = '#f59e0b';
+        valueLabel.style.color = '#f59e0b';
+    } else {
+        needle.style.background = '#22c55e';
+        valueLabel.style.color = '#22c55e';
+    }
+}
+
+function setLoadingState(isLoading) {
+    const loading = document.getElementById('loading-animation');
+    const results = document.getElementById('results');
+    const loadingText = document.getElementById('loading-text');
+
+    loading.style.display = isLoading ? 'block' : 'none';
+    results.classList.toggle('loading-state', isLoading);
+
+    if (isLoading) {
+        loadingText.textContent = 'Ejecutando diagnóstico real de red...';
+    }
+}
+
+function updateProgressSimulation() {
+    const progressFill = document.querySelector('.progress-fill');
+    const loadingText = document.getElementById('loading-text');
+    let progress = 0;
+
+    const interval = setInterval(() => {
+        progress = Math.min(95, progress + Math.random() * 10);
+        progressFill.style.width = `${progress}%`;
+        loadingText.textContent = `Ejecutando diagnóstico real... ${Math.round(progress)}%`;
+    }, 300);
+
+    return {
+        complete() {
+            clearInterval(interval);
+            progressFill.style.width = '100%';
+            loadingText.textContent = 'Diagnóstico completado';
+        },
+        stop() {
+            clearInterval(interval);
+            progressFill.style.width = '0%';
+        }
+    };
+}
+
+function saveHistory(result) {
+    const current = safeReadHistory();
+    current.unshift(result);
+    safeWriteHistory(current.slice(0, 5));
+    renderHistory();
+}
+
+function renderHistory() {
+    const historyList = document.getElementById('history-list');
+    const current = safeReadHistory();
+
+    if (!current.length) {
+        historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
         return;
     }
 
-    btn.disabled = true;
-    btn.textContent = 'Probando...';
+    historyList.innerHTML = current
+        .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
+        .join('');
+}
 
-    // Mostrar animación del cohete
-    loadingAnim.style.display = 'block';
-    progressFill.style.width = '0%'; // Reset progreso
+async function copyResultToClipboard() {
+    const text = [
+        'Internet Speed Result',
+        `Download: ${document.getElementById('download').textContent} Mbps`,
+        `Upload: ${document.getElementById('upload').textContent} Mbps`,
+        `Ping: ${document.getElementById('ping').textContent} ms`,
+        `Fecha: ${new Date().toLocaleDateString('es-AR')}`,
+        `País: ${userCountry}`
+    ].join('\n');
 
-    // Simular progreso gradual
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress > 100) progress = 100;
-        progressFill.style.width = progress + '%';
-        loadingText.textContent = `Probando... ${Math.round(progress)}% - ¡Acelerando!`;
-    }, 400);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+}
+
+function toggleInterviewMode(force = null) {
+    isInterviewMode = typeof force === 'boolean' ? force : !isInterviewMode;
+    document.body.classList.toggle('interview-mode', isInterviewMode);
+
+    const toggleButton = document.getElementById('interview-mode-toggle');
+    const backButton = document.getElementById('back-home');
+
+    toggleButton.textContent = isInterviewMode ? 'Salir de modo entrevista' : 'Modo entrevista';
+    toggleButton.classList.toggle('active', isInterviewMode);
+    backButton.hidden = !isInterviewMode;
+}
+
+async function runSpeedTest() {
+    const startButton = document.getElementById('start-test');
+    startButton.disabled = true;
+    startButton.textContent = 'Midiendo...';
+
+    setLoadingState(true);
+    const progress = updateProgressSimulation();
 
     try {
-        // Limpiar resultados anteriores
-        document.getElementById('ping').textContent = '---';
-        document.getElementById('download').textContent = '---';
-        document.getElementById('upload').textContent = '---';
+        const [downloadResult, uploadResult, pingResult] = await Promise.all([
+            measureDownload(),
+            measureUpload(),
+            measurePingAndJitter()
+        ]);
 
-        const ping = await measurePing();
-        const download = await measureDownload();
-        const upload = measureUpload();
+        const stability = calculateStability(downloadResult.samples);
+        const classification = getSpeedClassification(downloadResult.average);
+        const date = new Date().toLocaleDateString('es-AR');
 
-        // Detener simulación y finalizar animación
-        clearInterval(progressInterval);
-        progressFill.style.width = '100%';
-        loadingText.textContent = '¡Llegamos a la meta! Resultados:';
+        document.getElementById('download').textContent = formatNumber(downloadResult.average);
+        document.getElementById('upload').textContent = formatNumber(uploadResult);
+        document.getElementById('ping').textContent = String(pingResult.ping);
+        document.getElementById('avg-ping').textContent = String(pingResult.ping);
+        document.getElementById('jitter').textContent = String(pingResult.jitter);
+        document.getElementById('stability').textContent = String(stability);
+        document.getElementById('speed-class').textContent = classification;
+        document.getElementById('isp-result').textContent = userISP;
 
-        // Animar despegue final del cohete
-        document.querySelector('.rocket').classList.add('rocket-launched');
+        updateGauge(downloadResult.average);
+        saveHistory({
+            date,
+            download: formatNumber(downloadResult.average),
+            upload: formatNumber(uploadResult),
+            ping: String(pingResult.ping)
+        });
 
-        // Esperar para que se vea la animación
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Mostrar resultados
-        document.getElementById('ping').textContent = ping;
-        document.getElementById('download').textContent = download;
-        document.getElementById('upload').textContent = upload;
-
-        btn.textContent = 'Volver a testear';
-
-    } catch (e) {
-        console.error('Error en el test:', e);
-        clearInterval(progressInterval);
-        loadingText.textContent = 'Error en la prueba 😔';
-        btn.textContent = 'Reintentar';
+        progress.complete();
+    } catch {
+        progress.stop();
+        document.getElementById('loading-text').textContent = 'No se pudo completar la prueba. Reintentá.';
     } finally {
-        // Ocultar animación después de unos segundos
-        setTimeout(() => {
-            loadingAnim.style.display = 'none';
-            document.querySelector('.rocket').classList.remove('rocket-launched');
-        }, 3000);
-        btn.disabled = false;
+        setTimeout(() => setLoadingState(false), 900);
+        startButton.disabled = false;
+        startButton.textContent = 'Volver a testear';
     }
 }
 
-// --- INICIALIZACIÓN ---
-window.addEventListener('load', () => {
-    getUserConnectionInfo(); // Cargar IP/ISP/ubicación al inicio
-    const startButton = document.getElementById('start-test');
-    if (startButton) {
-        startButton.addEventListener('click', runSpeedTest);
-    } else {
-        console.error('Botón #start-test no encontrado');
-    }
+function initEvents() {
+    const startBtn = document.getElementById('start-test');
+    const interviewBtn = document.getElementById('interview-mode-toggle');
+    const backBtn = document.getElementById('back-home');
+    const copyBtn = document.getElementById('copy-result');
+
+    if (!startBtn || !interviewBtn || !backBtn || !copyBtn) return;
+
+    startBtn.addEventListener('click', runSpeedTest);
+    interviewBtn.addEventListener('click', () => toggleInterviewMode());
+    backBtn.addEventListener('click', () => toggleInterviewMode(false));
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await copyResultToClipboard();
+            copyBtn.textContent = 'Resultado copiado ✅';
+            setTimeout(() => {
+                copyBtn.textContent = 'COPIAR RESULTADO PARA ENTREVISTA';
+            }, 1400);
+        } catch {
+            copyBtn.textContent = 'No se pudo copiar';
+        }
+    });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    renderHistory();
+    initEvents();
+    fetchConnectionData();
 });
