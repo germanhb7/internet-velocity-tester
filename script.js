@@ -407,7 +407,12 @@ function init() {
     const backButton = document.getElementById('back-home');
     const copyButton = document.getElementById('copy-result');
 
-    if (startButton) startButton.addEventListener('click', startTest);
+    if (!startButton) {
+        console.error("No se encontró el botón 'start-test'. Test no iniciará.");
+        return;
+    }
+
+    startButton.addEventListener('click', startTest);
     if (interviewButton) interviewButton.addEventListener('click', () => toggleInterviewMode());
     if (backButton) backButton.addEventListener('click', () => toggleInterviewMode(false));
     if (copyButton) {
@@ -425,7 +430,11 @@ function init() {
     }
 
     renderHistory();
-    fetchConnectionData();
-}
 
+    try {
+        fetchConnectionData();
+    } catch(e) {
+        console.error("Error al obtener datos de conexión:", e);
+    }
+}
 window.addEventListener('DOMContentLoaded', init);
