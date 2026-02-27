@@ -98,6 +98,19 @@ async function measureDownload() {
         } catch {
             // Continuar con siguiente muestra para robustez.
         }
+
+        if (samples.length >= DOWNLOAD_ITERATIONS) {
+            break;
+        }
+
+        if (samples.length >= DOWNLOAD_ITERATIONS) {
+            break;
+        }
+        await response.arrayBuffer();
+        const duration = (performance.now() - start) / 1000;
+        totalBits += KNOWN_FILE_SIZE_BYTES * 8;
+        totalTimeSeconds += duration;
+        samples.push((KNOWN_FILE_SIZE_BYTES * 8) / duration / 1000000);
     }
 
     if (!samples.length) {
@@ -237,6 +250,7 @@ function renderHistory() {
         historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
         return;
     }
+}
 
     historyList.innerHTML = current
         .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
