@@ -1,27 +1,27 @@
+// Configuración principal
 const HISTORY_KEY = 'internetVelocityHistory';
-const DOWNLOAD_TARGETS = [
-    { url: 'https://speed.cloudflare.com/__down?bytes=1200000', bytes: 1200000 },
-    { url: 'https://speed.cloudflare.com/__down?bytes=1800000', bytes: 1800000 },
-    { url: 'https://speed.cloudflare.com/__down?bytes=2500000', bytes: 2500000 }
+const LIBRESPEED_GARBAGE = 'https://librespeed.org/backend/garbage.php';
+const LIBRESPEED_EMPTY = 'https://librespeed.org/backend/empty.php';
+const CORS_PROXIES = [
+    (url) => `https://cors.isomorphic-git.org/${url}`,
+    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
 ];
-const LOCAL_DOWNLOAD_TARGET = { url: './test-download.bin', bytes: 104857600 };
-const UPLOAD_ENDPOINT = 'https://httpbin.org/post';
-const UPLOAD_SIZE_BYTES = 2 * 1024 * 1024;
-const PING_URL = 'https://www.google.com/generate_204';
+const DOWNLOAD_BYTES_SAMPLES = [500000, 1000000, 2000000];
+const UPLOAD_SIZE_BYTES = 1024 * 1024; // 1MB
 
 let userCountry = 'No disponible';
 let userISP = 'No disponible';
 let isInterviewMode = false;
+
+function formatNumber(value, decimals = 2) {
+    return Number.isFinite(value) ? value.toFixed(decimals) : '0.00';
+}
 
 function getSpeedClassification(downloadMbps) {
     if (downloadMbps < 10) return 'Lenta';
     if (downloadMbps < 50) return 'Normal';
     if (downloadMbps < 200) return 'Rápida';
     return 'Profesional';
-}
-
-function formatNumber(value, decimals = 2) {
-    return Number.isFinite(value) ? value.toFixed(decimals) : '0.00';
 }
 
 function safeReadHistory() {
@@ -36,155 +36,40 @@ function safeWriteHistory(items) {
     try {
         localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
     } catch {
-        // Sin bloqueo de la UI por storage.
+        // Evitar romper la app si localStorage está bloqueado.
     }
 }
 
-async function fetchConnectionData() {
-    try {
-        const response = await fetch(`https://ipapi.co/json/?cacheBust=${Date.now()}`);
-        const data = response.ok ? await response.json() : {};
-
-        userCountry = data.country_name || data.country_code || 'No disponible';
-        userISP = data.org || 'No disponible';
-
-        document.getElementById('ip').textContent = data.ip || 'No disponible';
-        document.getElementById('isp').textContent = userISP;
-        document.getElementById('city').textContent = data.city || 'No disponible';
-        document.getElementById('country').textContent = userCountry;
-        document.getElementById('asn').textContent = data.asn || 'No disponible';
-        document.getElementById('isp-result').textContent = userISP;
-    } catch {
-        document.getElementById('ip').textContent = 'No disponible';
-        document.getElementById('isp').textContent = 'No disponible';
-        document.getElementById('city').textContent = 'No disponible';
-        document.getElementById('country').textContent = 'No disponible';
-        document.getElementById('asn').textContent = 'No disponible';
-        document.getElementById('isp-result').textContent = 'No disponible';
-    }
+function saveHistory(item) {
+    const current = safeReadHistory();
+    current.unshift(item);
+    safeWriteHistory(current.slice(0, 5));
+    renderHistory();
 }
 
-async function measureDownloadSample(target) {
-    const url = `${target.url}${target.url.includes('?') ? '&' : '?'}cacheBust=${Date.now()}`;
-    const start = performance.now();
+function renderHistory() {
+    const historyList = document.getElementById('history-list');
+    if (!historyList) return;
 
-    const response = await fetch(url, {
-        method: 'GET',
-        cache: 'no-store'
-    });
-
-    if (!response.ok) {
-        throw new Error('Descarga no disponible');
+    const entries = safeReadHistory();
+    if (!entries.length) {
+        historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
+        return;
     }
 
-    const buffer = await response.arrayBuffer();
-    const durationSeconds = (performance.now() - start) / 1000;
-    const bytes = buffer.byteLength || target.bytes;
-    const mbps = (bytes * 8) / durationSeconds / 1000000;
-
-    if (!Number.isFinite(mbps) || mbps <= 0) {
-        throw new Error('Muestra de descarga inválida');
-    }
-
-    return mbps;
-}
-
-async function measureDownload() {
-    const samples = [];
-
-    for (const target of DOWNLOAD_TARGETS) {
-        try {
-            samples.push(await measureDownloadSample(target));
-        } catch {
-            // Continuar con siguiente muestra para robustez.
-        }
-
-        if (samples.length >= DOWNLOAD_ITERATIONS) {
-            break;
-        }
-
-        if (samples.length >= DOWNLOAD_ITERATIONS) {
-            break;
-        }
-        await response.arrayBuffer();
-        const duration = (performance.now() - start) / 1000;
-        totalBits += KNOWN_FILE_SIZE_BYTES * 8;
-        totalTimeSeconds += duration;
-        samples.push((KNOWN_FILE_SIZE_BYTES * 8) / duration / 1000000);
-    }
-
-    if (!samples.length) {
-        samples.push(await measureDownloadSample(LOCAL_DOWNLOAD_TARGET));
-    }
-
-    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length;
-    return { average, samples };
-}
-
-async function measureUpload() {
-    const payload = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
-    const start = performance.now();
-
-    try {
-        await fetch(`${UPLOAD_ENDPOINT}?cacheBust=${Date.now()}`, {
-            method: 'POST',
-            body: payload,
-            cache: 'no-store'
-        });
-    } catch {
-        const fallbackSeconds = 0.8;
-        return (UPLOAD_SIZE_BYTES * 8) / fallbackSeconds / 1000000;
-    }
-
-    const durationSeconds = (performance.now() - start) / 1000;
-    const mbps = (UPLOAD_SIZE_BYTES * 8) / durationSeconds / 1000000;
-    return Number.isFinite(mbps) && mbps > 0 ? mbps : 0;
-}
-
-async function measurePingAndJitter() {
-    const pings = [];
-
-    for (let i = 0; i < 5; i += 1) {
-        const start = performance.now();
-        try {
-            await fetch(`${PING_URL}?cacheBust=${Date.now()}-${i}`, { mode: 'no-cors', cache: 'no-store' });
-        } catch {
-            // Igual usar tiempo transcurrido como latencia aproximada.
-        }
-        pings.push(performance.now() - start);
-    }
-
-    const avgPing = pings.reduce((acc, value) => acc + value, 0) / pings.length;
-    const diffs = pings.slice(1).map((value, index) => Math.abs(value - pings[index]));
-    const jitter = diffs.length ? diffs.reduce((acc, value) => acc + value, 0) / diffs.length : 0;
-
-    return {
-        ping: Math.round(avgPing),
-        jitter: Math.round(jitter)
-    };
-}
-
-function calculateStability(samples) {
-    if (!samples.length) return 0;
-
-    const min = Math.min(...samples);
-    const max = Math.max(...samples);
-    if (max === 0) return 0;
-
-    const variationPercent = ((max - min) / max) * 100;
-    const stability = 100 - variationPercent;
-    return Math.max(0, Math.min(100, Math.round(stability)));
+    historyList.innerHTML = entries
+        .map((entry) => `<li>${entry.date} - Download ${entry.download} Mbps - Upload ${entry.upload} Mbps - Ping ${entry.ping} ms</li>`)
+        .join('');
 }
 
 function updateGauge(downloadMbps) {
     const needle = document.getElementById('gauge-needle');
     const valueLabel = document.getElementById('gauge-value');
+    if (!needle || !valueLabel) return;
 
-    const speed = Math.max(0, Math.min(200, downloadMbps));
-    const angle = (speed / 200) * 180 - 90;
-
+    const clamped = Math.max(0, Math.min(200, downloadMbps));
+    const angle = (clamped / 200) * 180 - 90;
     needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
-    valueLabel.textContent = `${formatNumber(downloadMbps, 1)} Mbps`;
 
     if (downloadMbps < 20) {
         needle.style.background = '#ef4444';
@@ -196,19 +81,18 @@ function updateGauge(downloadMbps) {
         needle.style.background = '#22c55e';
         valueLabel.style.color = '#22c55e';
     }
+
+    valueLabel.textContent = `${formatNumber(downloadMbps, 1)} Mbps`;
 }
 
-function setLoadingState(isLoading) {
+function setLoadingState(isLoading, text = 'Ejecutando diagnóstico real...') {
     const loading = document.getElementById('loading-animation');
-    const results = document.getElementById('results');
     const loadingText = document.getElementById('loading-text');
+    const results = document.getElementById('results');
 
-    loading.style.display = isLoading ? 'block' : 'none';
-    results.classList.toggle('loading-state', isLoading);
-
-    if (isLoading) {
-        loadingText.textContent = 'Ejecutando diagnóstico real de red...';
-    }
+    if (loading) loading.style.display = isLoading ? 'block' : 'none';
+    if (results) results.classList.toggle('loading-state', isLoading);
+    if (loadingText && isLoading) loadingText.textContent = text;
 }
 
 function updateProgressSimulation() {
@@ -217,52 +101,209 @@ function updateProgressSimulation() {
     let progress = 0;
 
     const interval = setInterval(() => {
-        progress = Math.min(95, progress + Math.random() * 10);
-        progressFill.style.width = `${progress}%`;
-        loadingText.textContent = `Ejecutando diagnóstico real... ${Math.round(progress)}%`;
+        progress = Math.min(95, progress + Math.random() * 9);
+        if (progressFill) progressFill.style.width = `${progress}%`;
+        if (loadingText) loadingText.textContent = `Ejecutando diagnóstico real... ${Math.round(progress)}%`;
     }, 300);
 
     return {
         complete() {
             clearInterval(interval);
-            progressFill.style.width = '100%';
-            loadingText.textContent = 'Diagnóstico completado';
+            if (progressFill) progressFill.style.width = '100%';
+            if (loadingText) loadingText.textContent = 'Diagnóstico completado';
         },
         stop() {
             clearInterval(interval);
-            progressFill.style.width = '0%';
+            if (progressFill) progressFill.style.width = '0%';
         }
     };
 }
 
-function saveHistory(result) {
-    const current = safeReadHistory();
-    current.unshift(result);
-    safeWriteHistory(current.slice(0, 5));
-    renderHistory();
+async function fetchConnectionData() {
+    const ipElement = document.getElementById('ip');
+    const ispElement = document.getElementById('isp');
+    const cityElement = document.getElementById('city');
+    const countryElement = document.getElementById('country');
+    const asnElement = document.getElementById('asn');
+
+    if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
+
+    fetch('https://ipapi.co/json/')
+        .then((res) => res.json())
+        .then((data) => {
+            ipElement.textContent = data.ip || 'No disponible';
+            ispElement.textContent = data.org || 'No disponible';
+            cityElement.textContent = data.city || 'No disponible';
+            countryElement.textContent = data.country_name || 'No disponible';
+            asnElement.textContent = data.asn || 'No disponible';
+            userCountry = data.country_name || 'No disponible';
+            userISP = data.org || 'No disponible';
+
+            const ispResult = document.getElementById('isp-result');
+            if (ispResult) ispResult.textContent = userISP;
+        })
+        .catch((error) => {
+            console.error('IP API error:', error);
+            ipElement.textContent = 'No disponible';
+            ispElement.textContent = 'No disponible';
+            cityElement.textContent = 'No disponible';
+            countryElement.textContent = 'No disponible';
+            asnElement.textContent = 'No disponible';
+        });
 }
 
-function renderHistory() {
-    const historyList = document.getElementById('history-list');
-    const current = safeReadHistory();
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!current.length) {
-        historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
-        return;
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
-    historyList.innerHTML = current
-        .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
-        .join('');
+async function requestWithCorsFallback(baseUrl, options = {}, timeoutMs = 12000) {
+    try {
+        return await fetchWithTimeout(baseUrl, options, timeoutMs);
+    } catch {
+        for (const makeProxyUrl of CORS_PROXIES) {
+            try {
+                return await fetchWithTimeout(makeProxyUrl(baseUrl), options, timeoutMs);
+            } catch {
+                // Probar siguiente proxy.
+            }
+        }
+        throw new Error('Request failed with all CORS fallbacks');
+    }
+}
+
+async function measureDownload() {
+    const samples = [];
+
+    for (let i = 0; i < DOWNLOAD_BYTES_SAMPLES.length; i += 1) {
+        const bytes = DOWNLOAD_BYTES_SAMPLES[i];
+        const testUrl = `${LIBRESPEED_GARBAGE}?ckSize=${bytes}&cacheBust=${Date.now()}-${i}`;
+        const start = performance.now();
+
+        try {
+            const response = await fetchWithTimeout(testUrl, { cache: 'no-store' }, 4000);
+            if (!response.ok) {
+                throw new Error('Download test failed');
+            }
+
+            const buffer = await response.arrayBuffer();
+            const duration = (performance.now() - start) / 1000;
+            const measuredBytes = buffer.byteLength || bytes;
+            const mbps = (measuredBytes * 8) / duration / 1000000;
+            if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
+        } catch {
+            // Intento con siguiente muestra.
+        }
+    }
+
+    // Fallback robusto si LibreSpeed falla por CORS/región.
+    if (!samples.length) {
+        const fallbackUrl = `./test-download.bin?cacheBust=${Date.now()}`;
+        const start = performance.now();
+        const response = await fetchWithTimeout(fallbackUrl, { cache: 'no-store' }, 10000);
+        if (!response.ok) {
+            throw new Error('No se pudo medir descarga');
+        }
+        const buffer = await response.arrayBuffer();
+        const duration = (performance.now() - start) / 1000;
+        const mbps = (buffer.byteLength * 8) / duration / 1000000;
+        if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
+    }
+
+    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length;
+    return { average, samples };
+}
+
+async function measureUpload() {
+    const blob = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
+
+    // 1) Intento principal: LibreSpeed
+    const startDirect = performance.now();
+    try {
+        const directRes = await fetchWithTimeout(`${LIBRESPEED_GARBAGE}?cacheBust=${Date.now()}`, {
+            method: 'POST',
+            body: blob,
+            cache: 'no-store'
+        }, 6000);
+
+        if (directRes.ok) {
+            const duration = (performance.now() - startDirect) / 1000;
+            const mbps = (UPLOAD_SIZE_BYTES * 8) / duration / 1000000;
+            if (Number.isFinite(mbps) && mbps > 0) return mbps;
+        }
+    } catch {
+        // continua
+    }
+
+    // 2) Fallback real a httpbin para ambientes restrictivos.
+    const startHttpBin = performance.now();
+    const httpBinRes = await fetchWithTimeout(`https://httpbin.org/post?cacheBust=${Date.now()}`, {
+        method: 'POST',
+        body: blob,
+        cache: 'no-store'
+    }, 8000);
+
+    if (!httpBinRes.ok) {
+        throw new Error('No se pudo medir subida');
+    }
+
+    const durationHttpBin = (performance.now() - startHttpBin) / 1000;
+    const mbpsHttpBin = (UPLOAD_SIZE_BYTES * 8) / durationHttpBin / 1000000;
+    if (!Number.isFinite(mbpsHttpBin) || mbpsHttpBin <= 0) {
+        throw new Error('Medición de subida inválida');
+    }
+
+    return mbpsHttpBin;
+}
+
+async function measurePingAndJitter() {
+    const samples = [];
+
+    for (let i = 0; i < 5; i += 1) {
+        const start = performance.now();
+        try {
+            await fetchWithTimeout(`${LIBRESPEED_EMPTY}?cacheBust=${Date.now()}-${i}`, {
+                mode: 'no-cors',
+                cache: 'no-store'
+            }, 2500);
+        } catch {
+            // Se mantiene el tiempo igualmente para aproximación de latencia.
+        }
+        samples.push(performance.now() - start);
+    }
+
+    const avg = samples.reduce((acc, value) => acc + value, 0) / samples.length;
+    const deltas = samples.slice(1).map((value, idx) => Math.abs(value - samples[idx]));
+    const jitter = deltas.length ? deltas.reduce((acc, value) => acc + value, 0) / deltas.length : 0;
+
+    return {
+        ping: Math.round(avg),
+        jitter: Math.round(jitter)
+    };
+}
+
+function calculateStability(samples) {
+    if (!samples.length) return 0;
+    const min = Math.min(...samples);
+    const max = Math.max(...samples);
+    if (max <= 0) return 0;
+
+    const variationPercent = ((max - min) / max) * 100;
+    return Math.max(0, Math.min(100, Math.round(100 - variationPercent)));
 }
 
 async function copyResultToClipboard() {
     const text = [
         'Internet Speed Result',
-        `Download: ${document.getElementById('download').textContent} Mbps`,
-        `Upload: ${document.getElementById('upload').textContent} Mbps`,
-        `Ping: ${document.getElementById('ping').textContent} ms`,
+        `Download: ${document.getElementById('download')?.textContent || '0.00'} Mbps`,
+        `Upload: ${document.getElementById('upload')?.textContent || '0.00'} Mbps`,
+        `Ping: ${document.getElementById('ping')?.textContent || '0'} ms`,
         `Fecha: ${new Date().toLocaleDateString('es-AR')}`,
         `País: ${userCountry}`
     ].join('\n');
@@ -271,100 +312,117 @@ async function copyResultToClipboard() {
         await navigator.clipboard.writeText(text);
         return;
     }
-
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textArea);
 }
 
-function toggleInterviewMode(force = null) {
-    isInterviewMode = typeof force === 'boolean' ? force : !isInterviewMode;
+    const input = document.createElement('textarea');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+}
+
+function toggleInterviewMode(forceMode = null) {
+    isInterviewMode = typeof forceMode === 'boolean' ? forceMode : !isInterviewMode;
     document.body.classList.toggle('interview-mode', isInterviewMode);
 
-    const toggleButton = document.getElementById('interview-mode-toggle');
+    const interviewButton = document.getElementById('interview-mode');
     const backButton = document.getElementById('back-home');
-
-    toggleButton.textContent = isInterviewMode ? 'Salir de modo entrevista' : 'Modo entrevista';
-    toggleButton.classList.toggle('active', isInterviewMode);
-    backButton.hidden = !isInterviewMode;
+    if (interviewButton) {
+        interviewButton.textContent = isInterviewMode ? 'Salir de modo entrevista' : 'Modo entrevista';
+        interviewButton.classList.toggle('active', isInterviewMode);
+    }
+    if (backButton) backButton.hidden = !isInterviewMode;
 }
 
-async function runSpeedTest() {
+async function startTest() {
     const startButton = document.getElementById('start-test');
+    if (!startButton) return;
+
     startButton.disabled = true;
     startButton.textContent = 'Midiendo...';
-
-    setLoadingState(true);
+    setLoadingState(true, 'Iniciando diagnóstico de red...');
     const progress = updateProgressSimulation();
 
     try {
-        const [downloadResult, uploadResult, pingResult] = await Promise.all([
-            measureDownload(),
-            measureUpload(),
-            measurePingAndJitter()
-        ]);
-
-        const stability = calculateStability(downloadResult.samples);
-        const classification = getSpeedClassification(downloadResult.average);
-        const date = new Date().toLocaleDateString('es-AR');
-
-        document.getElementById('download').textContent = formatNumber(downloadResult.average);
-        document.getElementById('upload').textContent = formatNumber(uploadResult);
+        const pingResult = await measurePingAndJitter();
         document.getElementById('ping').textContent = String(pingResult.ping);
         document.getElementById('avg-ping').textContent = String(pingResult.ping);
         document.getElementById('jitter').textContent = String(pingResult.jitter);
+
+        const [downloadSettled, uploadSettled] = await Promise.allSettled([
+            measureDownload(),
+            measureUpload()
+        ]);
+
+        let downloadMbps = 0;
+        let uploadMbps = 0;
+        let stability = 0;
+
+        if (downloadSettled.status === 'fulfilled') {
+            downloadMbps = downloadSettled.value.average;
+            stability = calculateStability(downloadSettled.value.samples);
+            document.getElementById('speed-class').textContent = getSpeedClassification(downloadMbps);
+            updateGauge(downloadMbps);
+        } else {
+            document.getElementById('speed-class').textContent = 'No disponible';
+            updateGauge(0);
+        }
+
+        if (uploadSettled.status === 'fulfilled') {
+            uploadMbps = uploadSettled.value;
+        }
+
+        document.getElementById('download').textContent = formatNumber(downloadMbps);
+        document.getElementById('upload').textContent = formatNumber(uploadMbps);
         document.getElementById('stability').textContent = String(stability);
-        document.getElementById('speed-class').textContent = classification;
         document.getElementById('isp-result').textContent = userISP;
 
-        updateGauge(downloadResult.average);
         saveHistory({
-            date,
-            download: formatNumber(downloadResult.average),
-            upload: formatNumber(uploadResult),
+            date: new Date().toLocaleDateString('es-AR'),
+            download: formatNumber(downloadMbps),
+            upload: formatNumber(uploadMbps),
             ping: String(pingResult.ping)
         });
 
         progress.complete();
-    } catch {
+    } catch (error) {
         progress.stop();
-        document.getElementById('loading-text').textContent = 'No se pudo completar la prueba. Reintentá.';
+        const loadingText = document.getElementById('loading-text');
+        if (loadingText) loadingText.textContent = 'Error en la prueba. Reintentá.';
+        console.error('Speed test error:', error);
     } finally {
-        setTimeout(() => setLoadingState(false), 900);
+        setTimeout(() => setLoadingState(false), 800);
         startButton.disabled = false;
         startButton.textContent = 'Volver a testear';
     }
 }
 
-function initEvents() {
-    const startBtn = document.getElementById('start-test');
-    const interviewBtn = document.getElementById('interview-mode-toggle');
-    const backBtn = document.getElementById('back-home');
-    const copyBtn = document.getElementById('copy-result');
+function init() {
+    const startButton = document.getElementById('start-test');
+    const interviewButton = document.getElementById('interview-mode');
+    const backButton = document.getElementById('back-home');
+    const copyButton = document.getElementById('copy-result');
 
-    if (!startBtn || !interviewBtn || !backBtn || !copyBtn) return;
+    if (startButton) startButton.addEventListener('click', startTest);
+    if (interviewButton) interviewButton.addEventListener('click', () => toggleInterviewMode());
+    if (backButton) backButton.addEventListener('click', () => toggleInterviewMode(false));
+    if (copyButton) {
+        copyButton.addEventListener('click', async () => {
+            try {
+                await copyResultToClipboard();
+                copyButton.textContent = 'Resultado copiado ✅';
+                setTimeout(() => {
+                    copyButton.textContent = 'COPIAR RESULTADO PARA ENTREVISTA';
+                }, 1400);
+            } catch {
+                copyButton.textContent = 'No se pudo copiar';
+            }
+        });
+    }
 
-    startBtn.addEventListener('click', runSpeedTest);
-    interviewBtn.addEventListener('click', () => toggleInterviewMode());
-    backBtn.addEventListener('click', () => toggleInterviewMode(false));
-    copyBtn.addEventListener('click', async () => {
-        try {
-            await copyResultToClipboard();
-            copyBtn.textContent = 'Resultado copiado ✅';
-            setTimeout(() => {
-                copyBtn.textContent = 'COPIAR RESULTADO PARA ENTREVISTA';
-            }, 1400);
-        } catch {
-            copyBtn.textContent = 'No se pudo copiar';
-        }
-    });
+    renderHistory();
+    fetchConnectionData();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    renderHistory();
-    initEvents();
-    fetchConnectionData();
-});
+window.addEventListener('DOMContentLoaded', init);
