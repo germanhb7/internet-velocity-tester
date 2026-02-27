@@ -60,7 +60,6 @@ function initShareModal() {
     const copyButton = document.getElementById('share-copy-btn');
     const modal = document.getElementById('share-modal');
 
-    // SOLO agregar eventos si existen
     if (openButton) openButton.onclick = openShareModal;
     if (closeButton) closeButton.onclick = closeShareModal;
 
