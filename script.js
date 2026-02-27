@@ -124,48 +124,82 @@ async function fetchConnectionData() {
 
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
-    try {
-        // ---------- API 1 ----------
-        let res = await fetch('https://ipwho.is/');
-        let data = await res.json();
+    function setData(ip, isp, city, country, asn) {
+        ipElement.textContent = ip || 'No disponible';
+        ispElement.textContent = isp || 'No disponible';
+        cityElement.textContent = city || 'No disponible';
+        countryElement.textContent = country || 'No disponible';
+        asnElement.textContent = asn || 'No disponible';
 
-        if (!data.success) throw new Error('API1 failed');
+        userCountry = country || 'No disponible';
+        userISP = isp || 'No disponible';
 
-        ipElement.textContent = data.ip || 'No disponible';
-        ispElement.textContent = data.connection?.isp || 'No disponible';
-        cityElement.textContent = data.city || 'No disponible';
-        countryElement.textContent = data.country || 'No disponible';
-        asnElement.textContent = data.connection?.asn || 'No disponible';
+        const ispResult = document.getElementById('isp-result');
+        if (ispResult) ispResult.textContent = userISP;
+    }
 
-        userCountry = data.country || 'No disponible';
-        userISP = data.connection?.isp || 'No disponible';
-
-    } catch (e) {
+    async function fetchWithTimeout(url, timeout = 6000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
         try {
-            // ---------- API 2 fallback ----------
-            let res = await fetch('https://ipapi.is/json/');
-            let data = await res.json();
-
-            ipElement.textContent = data.ip || 'No disponible';
-            ispElement.textContent = data.company || 'No disponible';
-            cityElement.textContent = data.city || 'No disponible';
-            countryElement.textContent = data.country || 'No disponible';
-            asnElement.textContent = data.asn || 'No disponible';
-
-            userCountry = data.country || 'No disponible';
-            userISP = data.company || 'No disponible';
-
-        } catch {
-            ipElement.textContent = 'No disponible';
-            ispElement.textContent = 'No disponible';
-            cityElement.textContent = 'No disponible';
-            countryElement.textContent = 'No disponible';
-            asnElement.textContent = 'No disponible';
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(id);
+            return res;
+        } catch (e) {
+            clearTimeout(id);
+            throw e;
         }
     }
 
-    const ispResult = document.getElementById('isp-result');
-    if (ispResult) ispResult.textContent = userISP;
+    try {
+        // ---------- API 1 ----------
+        const res = await fetchWithTimeout(
+            'https://ipwho.is/?fields=ip,city,country,connection'
+        );
+        const data = await res.json();
+
+        if (data && data.ip) {
+            setData(
+                data.ip,
+                data.connection?.isp,
+                data.city,
+                data.country,
+                data.connection?.asn
+            );
+            return;
+        }
+        throw new Error('ipwho.is fallo');
+
+    } catch {
+        try {
+            // ---------- API 2 ----------
+            const res = await fetchWithTimeout('https://ipapi.co/json/');
+            const data = await res.json();
+
+            if (data && data.ip) {
+                setData(
+                    data.ip,
+                    data.org,
+                    data.city,
+                    data.country_name,
+                    data.asn
+                );
+                return;
+            }
+            throw new Error('ipapi fallo');
+
+        } catch {
+            try {
+                // ---------- API 3 ----------
+                const res = await fetchWithTimeout('https://api.ipify.org?format=json');
+                const data = await res.json();
+
+                setData(data.ip, '-', '-', '-', '-');
+            } catch {
+                setData('-', '-', '-', '-', '-');
+            }
+        }
+    }
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
