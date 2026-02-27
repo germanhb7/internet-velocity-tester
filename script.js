@@ -122,64 +122,59 @@ async function fetchConnectionData() {
     const countryElement = document.getElementById('country');
     const asnElement = document.getElementById('asn');
 
-    if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
+    if (!ipElement) return;
 
-    function setData({ ip, isp, city, country, asn }) {
-        ipElement.textContent = ip || '-';
-        ispElement.textContent = isp || '-';
-        cityElement.textContent = city || '-';
-        countryElement.textContent = country || '-';
-        asnElement.textContent = asn || '-';
+    function setData(ip='-', isp='-', city='-', country='-', asn='-') {
+        if (ipElement) ipElement.textContent = ip;
+        if (ispElement) ispElement.textContent = isp;
+        if (cityElement) cityElement.textContent = city;
+        if (countryElement) countryElement.textContent = country;
+        if (asnElement) asnElement.textContent = asn;
 
-        userCountry = country || '-';
-        userISP = isp || '-';
+        userCountry = country;
+        userISP = isp;
 
         const ispResult = document.getElementById('isp-result');
-        if (ispResult) ispResult.textContent = userISP;
+        if (ispResult) ispResult.textContent = isp;
     }
 
     try {
-        // 🔹 API PRINCIPAL
-        const res = await fetch('https://ipwho.is/?fields=ip,city,country,connection');
-        const data = await res.json();
+        // 1️⃣ IP segura
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        const ip = ipData.ip;
 
-        if (data.success) {
-            setData({
-                ip: data.ip,
-                isp: data.connection?.isp,
-                city: data.city,
-                country: data.country,
-                asn: data.connection?.asn
-            });
-            return;
-        }
+        // 2️⃣ Datos ISP sin CORS
+        const infoRes = await fetch(`https://ipapi.is/${ip}`);
+        const info = await infoRes.json();
 
-    } catch {}
+        setData(
+            ip,
+            info.company || info.connection?.isp || '-',
+            info.city || '-',
+            info.country || '-',
+            info.asn || info.connection?.asn || '-'
+        );
 
-    try {
-        // 🔹 FALLBACK 1
-        const res = await fetch('https://ipapi.co/json/');
-        const data = await res.json();
-
-        setData({
-            ip: data.ip,
-            isp: data.org,
-            city: data.city,
-            country: data.country_name,
-            asn: data.asn
-        });
         return;
 
     } catch {}
 
     try {
-        // 🔹 FALLBACK 2 solo IP
-        const res = await fetch('https://api.ipify.org?format=json');
+        // Backup
+        const res = await fetch('https://ipwho.is/');
         const data = await res.json();
-        setData({ ip: data.ip });
+
+        setData(
+            data.ip,
+            data.connection?.isp,
+            data.city,
+            data.country,
+            data.connection?.asn
+        );
 
     } catch {
-        setData({});
+        setData();
     }
 }
 
