@@ -312,6 +312,7 @@ async function copyResultToClipboard() {
         await navigator.clipboard.writeText(text);
         return;
     }
+}
 
     const input = document.createElement('textarea');
     input.value = text;
