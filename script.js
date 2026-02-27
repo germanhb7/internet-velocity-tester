@@ -11,24 +11,21 @@ const KNOWN_FILE_SIZE_BYTES = 104857600;
 const DOWNLOAD_ITERATIONS = 3;
 
 // --- OBTENER IP, ISP Y UBICACIÓN ---
+// --- OBTENER IP, ISP Y UBICACIÓN (usando ipinfo.io - más estable) ---
 async function getUserConnectionInfo() {
     try {
-        const response = await fetch('https://ip-api.com/json/');
+        const response = await fetch('https://ipinfo.io/json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
 
-        if (data.status === 'success') {
-            document.getElementById('ip').textContent = data.query || 'No disponible';
-            document.getElementById('isp').textContent = data.isp || 'No disponible';
-            document.getElementById('location').textContent =
-                `${data.city || 'Desconocida'}, ${data.regionName || ''}, ${data.country || ''}`;
-        } else {
-            throw new Error(data.message || 'Fallo en la API');
-        }
+        document.getElementById('ip').textContent = data.ip || 'No disponible';
+        document.getElementById('isp').textContent = data.org || 'No disponible'; // org suele ser el ISP
+        document.getElementById('location').textContent = 
+            `${data.city || 'Desconocida'}, ${data.region || ''}, ${data.country || ''}`;
     } catch (e) {
-        console.error('Error al obtener info de conexión:', e);
+        console.error('Error al obtener info de conexión (ipinfo.io):', e);
         document.getElementById('ip').textContent = 'Error';
         document.getElementById('isp').textContent = 'Error';
         document.getElementById('location').textContent = 'Error';
