@@ -3,12 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test de Velocidad de Internet Gratis en Argentina</title>
-    <meta name="description" content="Mide tu velocidad de internet gratis. Descarga, subida, ping y estabilidad en segundos.">
-    <meta property="og:title" content="Test de Velocidad de Internet Gratis en Argentina">
-    <meta property="og:description" content="Mide tu velocidad de internet gratis. Descarga, subida, ping y estabilidad en segundos.">
+    <title>Internet Speed Tester Gratis | Test de Velocidad de Internet en Argentina</title>
+    <meta name="description" content="Internet speed tester gratis en Argentina. Mide velocidad real de descarga, subida, ping, jitter y estabilidad en segundos.">
+    <meta name="keywords" content="internet tester, internet speed tester, test de velocidad, speed test argentina, medir internet, ping jitter, test de internet gratis">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://internet-velocity-tester.netlify.app/">
+
+    <meta property="og:title" content="Internet Speed Tester Gratis | Test de Velocidad de Internet">
+    <meta property="og:description" content="Mide tu velocidad real de internet: descarga, subida, ping, jitter y estabilidad.">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="es_AR">
+    <meta property="og:site_name" content="Internet Velocity Tester">
+    <meta property="og:url" content="https://internet-velocity-tester.netlify.app/">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Internet Speed Tester Gratis">
+    <meta name="twitter:description" content="Probá tu internet con métricas claras para casa, gaming y entrevistas técnicas.">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Internet Velocity Tester",
+      "url": "https://internet-velocity-tester.netlify.app/",
+      "inLanguage": "es-AR",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://internet-velocity-tester.netlify.app/?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
 </head>
@@ -18,12 +44,19 @@
         <p>Resultados claros para uso diario y entrevistas técnicas</p>
     </header>
 
+    <nav class="top-tabs" aria-label="Navegación principal">
+        <a href="#test-section">Test</a>
+        <a href="#history-section">Historial</a>
+        <a href="#contact-section">Contacto</a>
+    </nav>
+
     <main>
         <section id="info-section">
             <h2>Información de tu conexión</h2>
             <p>Tu IP: <span id="ip">Cargando...</span></p>
             <p>Tu proveedor (ISP): <span id="isp">Cargando...</span></p>
             <p>Ubicación aproximada: <span id="location">Cargando...</span></p>
+            <p class="help-text">Las pruebas usan transferencias HTTP reales y pueden variar según congestión, servidor y dispositivo.</p>
         </section>
 
         <section id="test-section">
@@ -32,6 +65,8 @@
                 <button id="start-test">INICIAR TEST</button>
                 <button id="interview-mode-toggle" class="secondary-btn">Modo entrevista</button>
             </div>
+
+            <button id="back-home" class="secondary-btn" hidden>⬅ Volver al inicio</button>
 
             <div id="loading-animation" style="display: none;">
                 <div class="rocket-container">
@@ -71,6 +106,12 @@
             <ul id="history-list">
                 <li>Sin pruebas guardadas.</li>
             </ul>
+        </section>
+
+        <section id="contact-section">
+            <h2>📩 Asesoramiento para mejorar internet en Windows</h2>
+            <p>Si querés ayuda personalizada para optimizar tu conexión, escribime a:</p>
+            <p><a class="contact-link" href="mailto:germanbarreto77@gmail.com">germanbarreto77@gmail.com</a></p>
         </section>
 
         <section id="premium-teaser">

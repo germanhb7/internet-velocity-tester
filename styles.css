@@ -40,6 +40,27 @@ header p {
     opacity: 0.92;
 }
 
+.top-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid #e8edf3;
+}
+
+.top-tabs a {
+    text-decoration: none;
+    color: #1d2a39;
+    background: #eef4ff;
+    border: 1px solid #d8e7ff;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
 main {
     flex: 1;
     max-width: 1100px;
@@ -74,11 +95,17 @@ h2 {
     color: var(--success);
 }
 
+.help-text {
+    color: #4e5d6d;
+    font-size: 0.95rem;
+    margin-top: 1rem;
+}
+
 .actions-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 button {
@@ -120,6 +147,11 @@ button {
 
 .secondary-btn.active {
     background: #0d6efd;
+}
+
+#back-home {
+    margin: 0 auto 1rem;
+    max-width: 260px;
 }
 
 .results-grid {
@@ -229,6 +261,17 @@ button {
     border: 1px solid #e6edf5;
 }
 
+#contact-section {
+    background: #f9fbff;
+    border: 1px solid #dce8f8;
+}
+
+.contact-link {
+    color: var(--primary-dark);
+    font-weight: 800;
+    font-size: 1.2rem;
+}
+
 #premium-teaser {
     background: linear-gradient(135deg, #ffc107, #ff9800);
 }
@@ -288,18 +331,24 @@ button {
 .interview-mode #info-section,
 .interview-mode #premium-teaser,
 .interview-mode #history-section,
+.interview-mode #contact-section,
 .interview-mode #copy-result,
 .interview-mode #loading-animation,
 .interview-mode #interview-mode-toggle,
 .interview-mode .details-row,
 .interview-mode .gauge-wrap,
 .interview-mode #start-test,
-.interview-mode #test-section h2 {
+.interview-mode #test-section h2,
+.interview-mode .top-tabs {
     display: none;
 }
 
 .interview-mode .result-card:not(.show-interview) {
     display: none;
+}
+
+.interview-mode #back-home {
+    display: block;
 }
 
 footer {
