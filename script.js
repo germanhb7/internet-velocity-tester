@@ -109,6 +109,11 @@ async function measureDownload() {
                 // Ignorar este ciclo para intentar el próximo.
             }
         }
+        await response.arrayBuffer();
+        const duration = (performance.now() - start) / 1000;
+        totalBits += KNOWN_FILE_SIZE_BYTES * 8;
+        totalTimeSeconds += duration;
+        samples.push((KNOWN_FILE_SIZE_BYTES * 8) / duration / 1000000);
     }
 
     if (!samples.length) {
