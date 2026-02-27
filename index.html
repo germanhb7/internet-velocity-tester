@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet Speed Tester Gratis | Test de Velocidad de Internet en Argentina</title>
+    <meta name="description" content="Internet speed tester gratis: mide descarga, subida, ping, jitter y estabilidad en segundos.">
+    <meta name="keywords" content="internet tester, internet speed tester, test de velocidad, ping, jitter, velocidad internet argentina">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://internet-velocity-tester.netlify.app/">
+    <meta name="theme-color" content="#0d6efd">
+
+    <meta property="og:title" content="Internet Speed Tester Gratis">
+    <meta property="og:description" content="Medí tu velocidad de internet con datos claros y reales.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="es_AR">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Internet Speed Tester Gratis">
+    <meta name="twitter:description" content="Diagnóstico de red con descarga, subida, ping y estabilidad.">
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+    <script src="share-modal.js" defer></script>
+</head>
+<body>
+    <header>
+        <h1>Test de velocidad de internet gratis</h1>
+        <p>Diagnóstico real de red para uso diario, gaming y entrevistas</p>
+    </header>
+
+    <nav class="top-tabs" aria-label="Navegación principal">
+        <a href="#test-section">Test</a>
+        <a href="#history-section">Historial</a>
+        <a href="#contact-section">Contacto</a>
+    </nav>
+
+    <main>
+        <section id="connection-section">
+            <h2>Tu conexión actual</h2>
+            <div class="connection-grid">
+                <p>IP: <span id="ip">Cargando...</span></p>
+                <p>Proveedor (ISP): <span id="isp">Cargando...</span></p>
+                <p>Ciudad: <span id="city">Cargando...</span></p>
+                <p>País: <span id="country">Cargando...</span></p>
+                <p>ASN: <span id="asn">Cargando...</span></p>
+            </div>
+        </section>
+
+        <section id="test-section">
+            <h2>Prueba de velocidad</h2>
+
+            <div class="actions-grid">
+                <button id="start-test">INICIAR TEST</button>
+                <button id="interview-mode" class="secondary-btn">Modo entrevista</button>
+            </div>
+
+            <button id="back-home" class="secondary-btn" hidden>⬅ Volver al inicio</button>
+
+            <div id="loading-animation" style="display: none;">
+                <p id="loading-text">Iniciando diagnóstico...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="results" class="results-grid" aria-live="polite">
+                <p class="result-card show-interview">
+                    <span class="metric-label">⬇ Descarga</span>
+                    <span id="download" class="metric-value">---</span>
+                    <span class="metric-unit">Mbps</span>
+                    <span id="speed-class" class="metric-note">Sin clasificación</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">⬆ Subida</span>
+                    <span id="upload" class="metric-value">---</span>
+                    <span class="metric-unit">Mbps</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">🎮 Ping</span>
+                    <span id="ping" class="metric-value">---</span>
+                    <span class="metric-unit">ms</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">🛰 ISP</span>
+                    <span id="isp-result" class="metric-value metric-value-small">---</span>
+                    <span class="metric-unit">Proveedor</span>
+                </p>
+
+                <p class="result-card">
+                    <span class="metric-label">📶 Estabilidad</span>
+                    <span id="stability" class="metric-value">---</span>
+                    <span class="metric-unit">%</span>
+                </p>
+            </div>
+
+            <div class="details-row">
+                <p>Ping promedio: <strong id="avg-ping">---</strong> ms</p>
+                <p>Jitter: <strong id="jitter">---</strong> ms</p>
+            </div>
+
+            <div id="gauge" class="gauge-wrap" aria-label="Velocímetro de velocidad de descarga: 0 Mbps" role="img">
+                <div class="gauge-track"></div>
+                <div id="gauge-needle" class="gauge-needle"></div>
+                <div id="gauge-value" class="gauge-value">0 Mbps</div>
+            </div>
+
+            <button id="copy-result" class="secondary-btn">COPIAR RESULTADO PARA ENTREVISTA</button>
+            <button id="share-btn" class="secondary-btn">Compartir resultado</button>
+        </section>
+
+        <section id="history-section">
+            <h2>📈 Historial de velocidad</h2>
+            <ul id="history-list">
+                <li>Sin pruebas guardadas.</li>
+            </ul>
+        </section>
+
+        <section id="contact-section">
+            <h2>📩 Asesoramiento para mejorar internet en Windows</h2>
+            <p>Contacto: <a class="contact-link" href="mailto:germanbarreto77@gmail.com">germanbarreto77@gmail.com</a></p>
+        </section>
+    </main>
+
+    <div id="share-modal" class="share-modal" aria-hidden="true" role="dialog" aria-labelledby="share-title">
+        <div class="share-modal-content">
+            <h3 id="share-title">Compartir resultado</h3>
+            <p id="share-summary">Generá o copiá un resumen rápido para compartir.</p>
+            <div class="share-actions">
+                <button id="share-copy-btn" class="secondary-btn">Copiar resumen</button>
+                <button id="share-close-btn" class="secondary-btn">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Internet Velocity Tester - Hecho para todos los usuarios</p>
+    </footer>
+</body>
+</html>
