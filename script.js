@@ -1,7 +1,10 @@
 // Configuración principal
 const HISTORY_KEY = 'internetVelocityHistory';
-const LIBRESPEED_GARBAGE = 'https://librespeed.org/backend/garbage.php';
-const LIBRESPEED_EMPTY = 'https://librespeed.org/backend/empty.php';
+const DOWNLOAD_TEST_URL = 'https://httpbin.org/bytes/';  // AWS global para download
+const UPLOAD_TEST_URL = 'https://httpbin.org/post';      // AWS global para upload
+const PING_TEST_URL = 'https://httpbin.org/get';         // AWS global para ping
+const FALLBACK_PING_URL = 'https://www.cloudflare.com/cdn-cgi/trace';  // Cloudflare fallback global
+const FALLBACK_DOWNLOAD_FILE = './test-download-5mb.bin';  // Opcional: Sube a Netlify para fallback (genera con dd if=/dev/urandom of=test-download-5mb.bin bs=1M count=5)
 const DOWNLOAD_BYTES_SAMPLES = [500000, 1000000, 2000000];
 const UPLOAD_SIZE_BYTES = 1024 * 1024; // 1MB
 
@@ -124,31 +127,40 @@ async function fetchConnectionData() {
 
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
-    try {
-        // ✅ API ipapi.co sin token, funciona directo en navegador
-        const res = await fetch('https://ipapi.co/json/');
-        const data = await res.json();
+    const apis = [
+        'https://ipapi.co/json/',          // Primaria, ya funciona
+        'https://ipwho.is/',               // Fallback global
+        'https://freeipapi.com/api/json'   // Otro fallback
+    ];
 
-        ipElement.textContent = data.ip || 'No disponible';
-        ispElement.textContent = data.org || 'No disponible';
-        cityElement.textContent = data.city || 'No disponible';
-        countryElement.textContent = data.country_name || 'No disponible';
+    for (const api of apis) {
+        try {
+            const res = await fetchWithTimeout(api, {}, 5000);
+            const data = await res.json();
+            // Normaliza keys para compatibilidad
+            ipElement.textContent = data.ip || data.ipAddress || 'No disponible';
+            ispElement.textContent = data.org || data.connection?.org || data.ispName || 'No disponible';
+            cityElement.textContent = data.city || data.cityName || 'No disponible';
+            countryElement.textContent = data.country_name || data.countryName || data.country || 'No disponible';
+            asnElement.textContent = data.asn || data.connection?.asn || data.asNumber || 'No disponible';
 
-        asnElement.textContent = data.asn || 'No disponible';
+            userCountry = data.country_name || data.countryName || data.country || 'No disponible';
+            userISP = data.org || data.connection?.org || data.ispName || 'No disponible';
 
-        userCountry = data.country_name || 'No disponible';
-        userISP = data.org || 'No disponible';
+            const ispResult = document.getElementById('isp-result');
+            if (ispResult) ispResult.textContent = userISP;
 
-    } catch (error) {
-        ipElement.textContent = 'No disponible';
-        ispElement.textContent = 'No disponible';
-        cityElement.textContent = 'No disponible';
-        countryElement.textContent = 'No disponible';
-        asnElement.textContent = 'No disponible';
+            return;  // Éxito, no continuamos con fallbacks
+        } catch (error) {
+            console.warn(`IP API ${api} failed: ${error.message}`);
+        }
     }
-
-    const ispResult = document.getElementById('isp-result');
-    if (ispResult) ispResult.textContent = userISP;
+    // Si todos fallan (raro)
+    ipElement.textContent = 'No disponible';
+    ispElement.textContent = 'No disponible';
+    cityElement.textContent = 'No disponible';
+    countryElement.textContent = 'No disponible';
+    asnElement.textContent = 'No disponible';
 }
 
 async function measureDownload() {
@@ -156,80 +168,65 @@ async function measureDownload() {
 
     for (let i = 0; i < DOWNLOAD_BYTES_SAMPLES.length; i += 1) {
         const bytes = DOWNLOAD_BYTES_SAMPLES[i];
-        const testUrl = `${LIBRESPEED_GARBAGE}?ckSize=${bytes}&cacheBust=${Date.now()}-${i}`;
+        const testUrl = `${DOWNLOAD_TEST_URL}${bytes}?seed=${Date.now()}-${i}`;
         const start = performance.now();
 
         try {
-            await fetchWithTimeout(testUrl, {
-                mode: 'no-cors',
+            const response = await fetchWithTimeout(testUrl, {
                 cache: 'no-store'
-            }, 5000);
+            }, 10000);
 
+            if (!response.ok) throw new Error(`Download HTTP error: ${response.status}`);
+
+            const buffer = await response.arrayBuffer();
             const duration = (performance.now() - start) / 1000;
-            const mbps = (bytes * 8) / duration / 1000000;
+            const mbps = (buffer.byteLength * 8) / duration / 1000000;
             if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
-        } catch {
-            // Intento con siguiente muestra.
+        } catch (error) {
+            console.error(`Download sample ${i} failed: ${error.message}`);
         }
     }
 
-    // Fallback robusto si LibreSpeed falla por red/región.
-    if (!samples.length) {
-        const fallbackUrl = `./test-download.bin?cacheBust=${Date.now()}`;
-        const start = performance.now();
-        const response = await fetchWithTimeout(fallbackUrl, { cache: 'no-store' }, 10000);
-        if (!response.ok) {
-            throw new Error('No se pudo medir descarga');
+    // Fallback opcional si subes el archivo
+    if (!samples.length && FALLBACK_DOWNLOAD_FILE) {
+        try {
+            const start = performance.now();
+            const response = await fetchWithTimeout(FALLBACK_DOWNLOAD_FILE, { cache: 'no-store' }, 10000);
+            if (!response.ok) throw new Error('Fallback download failed');
+            const buffer = await response.arrayBuffer();
+            const duration = (performance.now() - start) / 1000;
+            const mbps = (buffer.byteLength * 8) / duration / 1000000;
+            if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
+        } catch (error) {
+            console.error(`Download fallback failed: ${error.message}`);
         }
-        const buffer = await response.arrayBuffer();
-        const duration = (performance.now() - start) / 1000;
-        const mbps = (buffer.byteLength * 8) / duration / 1000000;
-        if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
     }
 
-    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length;
+    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length || 0;
     return { average, samples };
 }
 
 async function measureUpload() {
     const blob = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
 
-    // 1) Intento principal: LibreSpeed no-cors (medición por tiempo de subida del payload).
-    const startDirect = performance.now();
+    const start = performance.now();
     try {
-        await fetchWithTimeout(`${LIBRESPEED_GARBAGE}?cacheBust=${Date.now()}`, {
+        const response = await fetchWithTimeout(UPLOAD_TEST_URL, {
             method: 'POST',
             body: blob,
-            mode: 'no-cors',
             cache: 'no-store'
-        }, 6000);
+        }, 10000);
 
-        const duration = (performance.now() - startDirect) / 1000;
+        if (!response.ok) throw new Error(`Upload HTTP error: ${response.status}`);
+
+        const duration = (performance.now() - start) / 1000;
         const mbps = (UPLOAD_SIZE_BYTES * 8) / duration / 1000000;
         if (Number.isFinite(mbps) && mbps > 0) return mbps;
-    } catch {
-        // continua
+    } catch (error) {
+        console.error(`Upload failed: ${error.message}`);
     }
 
-    // 2) Fallback real a httpbin para ambientes restrictivos.
-    const startHttpBin = performance.now();
-    const httpBinRes = await fetchWithTimeout(`https://httpbin.org/post?cacheBust=${Date.now()}`, {
-        method: 'POST',
-        body: blob,
-        cache: 'no-store'
-    }, 8000);
-
-    if (!httpBinRes.ok) {
-        throw new Error('No se pudo medir subida');
-    }
-
-    const durationHttpBin = (performance.now() - startHttpBin) / 1000;
-    const mbpsHttpBin = (UPLOAD_SIZE_BYTES * 8) / durationHttpBin / 1000000;
-    if (!Number.isFinite(mbpsHttpBin) || mbpsHttpBin <= 0) {
-        throw new Error('Medición de subida inválida');
-    }
-
-    return mbpsHttpBin;
+    return 0;
 }
 
 async function measurePingAndJitter() {
@@ -237,18 +234,18 @@ async function measurePingAndJitter() {
 
     for (let i = 0; i < 5; i += 1) {
         const start = performance.now();
+        const url = i % 2 === 0 ? `${PING_TEST_URL}?cacheBust=${Date.now()}-${i}` : `${FALLBACK_PING_URL}?cacheBust=${Date.now()}-${i}`;
         try {
-            await fetchWithTimeout(`${LIBRESPEED_EMPTY}?cacheBust=${Date.now()}-${i}`, {
-                mode: 'no-cors',
+            await fetchWithTimeout(url, {
                 cache: 'no-store'
             }, 2500);
-        } catch {
-            // Se mantiene el tiempo igualmente para aproximación de latencia.
+        } catch (error) {
+            console.error(`Ping sample ${i} failed: ${error.message}`);
         }
         samples.push(performance.now() - start);
     }
 
-    const avg = samples.reduce((acc, value) => acc + value, 0) / samples.length;
+    const avg = samples.reduce((acc, value) => acc + value, 0) / samples.length || 0;
     const deltas = samples.slice(1).map((value, idx) => Math.abs(value - samples[idx]));
     const jitter = deltas.length ? deltas.reduce((acc, value) => acc + value, 0) / deltas.length : 0;
 
@@ -394,10 +391,32 @@ async function startTest() {
         const loadingText = document.getElementById('loading-text');
         if (loadingText) loadingText.textContent = 'Error en la prueba. Reintentá.';
         console.error('Speed test error:', error);
+        Swal.fire({
+            title: 'Error en el test',
+            text: 'No se pudieron completar las mediciones. Intenta de nuevo o verifica tu conexión.',
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
     } finally {
         setTimeout(() => setLoadingState(false), 800);
         startButton.disabled = false;
         startButton.textContent = 'Volver a testear';
+    }
+}
+
+async function fetchWithTimeout(url, options = {}, timeout = 5000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out');
+        }
+        throw error;
     }
 }
 
@@ -431,10 +450,6 @@ function init() {
 
     renderHistory();
 
-    try {
-        fetchConnectionData();
-    } catch(e) {
-        console.error("Error al obtener datos de conexión:", e);
-    }
+    fetchConnectionData().catch(e => console.error("Error al obtener datos de conexión:", e));
 }
 window.addEventListener('DOMContentLoaded', init);
