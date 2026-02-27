@@ -11,8 +11,7 @@ const DOWNLOAD_ITERATIONS = 3;
 // --- OBTENER IP, ISP Y UBICACIÓN (ya funciona) ---
 async function getUserConnectionInfo() {
     try {
-        const response = await fetch('http://ip-api.com/json/');
-        const data = await response.json();
+const response = await fetch('https://ip-api.com/json/');        const data = await response.json();
         if (data.status === 'success') {
             document.getElementById('ip').textContent = data.query || 'No disponible';
             document.getElementById('isp').textContent = data.isp || 'No disponible';
