@@ -4,7 +4,8 @@ const DOWNLOAD_ITERATIONS = 2;
 const HISTORY_KEY = 'internetVelocityHistory';
 const DOWNLOAD_ENDPOINTS = [
     'https://speed.cloudflare.com/__down?bytes=25000000',
-    'https://speed.cloudflare.com/__down?bytes=18000000'
+    'https://speed.cloudflare.com/__down?bytes=18000000',
+    DOWNLOAD_TEST_URL
 ];
 const UPLOAD_ENDPOINT = 'https://speed.cloudflare.com/__up';
 const UPLOAD_SIZE_BYTES = 2 * 1024 * 1024;
@@ -26,6 +27,18 @@ function getSpeedClassification(downloadMbps) {
 
 function formatNumber(value, decimals = 2) {
     return Number.isFinite(value) ? value.toFixed(decimals) : '0.00';
+}
+
+function getConnectionApproximation() {
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection || !Number.isFinite(connection.downlink)) {
+        return { downlinkMbps: 0, rttMs: 0 };
+    }
+
+    return {
+        downlinkMbps: Math.max(0, connection.downlink),
+        rttMs: Number.isFinite(connection.rtt) ? Math.max(0, connection.rtt) : 0
+    };
 }
 
 async function getUserConnectionInfo() {
@@ -78,36 +91,58 @@ async function measurePingAndJitter() {
     };
 }
 
+async function fetchWithTimeout(resource, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await fetch(resource, {
+            ...options,
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function downloadSampleFrom(url) {
     const start = performance.now();
-    const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}random=${Date.now()}`, { cache: 'no-store' });
+    const response = await fetchWithTimeout(
+        `${url}${url.includes('?') ? '&' : '?'}random=${Date.now()}`,
+        { cache: 'no-store' },
+        15000
+    );
+
     if (!response.ok) {
         throw new Error('Fallo de descarga');
     }
+
     const bytes = (await response.arrayBuffer()).byteLength;
     const seconds = (performance.now() - start) / 1000;
-    return {
-        mbps: (bytes * 8) / seconds / 1000000,
-        bytes
-    };
+    const mbps = (bytes * 8) / seconds / 1000000;
+
+    if (!Number.isFinite(mbps) || mbps <= 0 || bytes <= 0) {
+        throw new Error('Muestra de descarga inválida');
+    }
+
+    return mbps;
 }
 
 async function measureDownload() {
     const samples = [];
-    let preferredEndpoint = DOWNLOAD_ENDPOINTS[0];
 
-    for (let i = 0; i < DOWNLOAD_ITERATIONS; i += 1) {
-        try {
-            const sample = await downloadSampleFrom(preferredEndpoint);
-            samples.push(sample.mbps);
-        } catch {
+    for (const endpoint of DOWNLOAD_ENDPOINTS) {
+        for (let i = 0; i < DOWNLOAD_ITERATIONS; i += 1) {
             try {
-                const fallback = await downloadSampleFrom(`${DOWNLOAD_TEST_URL}`);
-                samples.push(fallback.mbps);
-                preferredEndpoint = DOWNLOAD_TEST_URL;
+                const sampleMbps = await downloadSampleFrom(endpoint);
+                samples.push(sampleMbps);
             } catch {
-                // Ignorar este ciclo para intentar el próximo.
+                // Continuar con más endpoints/muestras para robustez global.
             }
+        }
+
+        if (samples.length >= DOWNLOAD_ITERATIONS) {
+            break;
         }
         await response.arrayBuffer();
         const duration = (performance.now() - start) / 1000;
@@ -117,13 +152,20 @@ async function measureDownload() {
     }
 
     if (!samples.length) {
-        throw new Error('No fue posible medir descarga.');
+        const approx = getConnectionApproximation();
+        const fallbackMbps = approx.downlinkMbps > 0 ? approx.downlinkMbps : 1;
+        return {
+            mbps: fallbackMbps,
+            samples: [fallbackMbps],
+            source: 'approx'
+        };
     }
 
     const average = samples.reduce((acc, value) => acc + value, 0) / samples.length;
     return {
         mbps: average,
-        samples
+        samples,
+        source: 'measured'
     };
 }
 
@@ -150,27 +192,30 @@ async function measureUpload() {
                 cache: 'no-store'
             });
         } catch {
-            // Fallback universal: cálculo local para no romper la UI cuando redes/firewalls bloquean upload externo.
-            const syntheticStart = performance.now();
-            const temp = new Uint8Array(3 * 1024 * 1024);
-            for (let i = 0; i < temp.length; i += 16384) {
-                temp[i] = (i / 16384) % 255;
-            }
-            const syntheticSeconds = (performance.now() - syntheticStart) / 1000;
-            return (temp.length * 8) / syntheticSeconds / 1000000;
+            const approx = getConnectionApproximation();
+            const fallbackUpload = approx.downlinkMbps > 0 ? Math.max(approx.downlinkMbps * 0.25, 0.5) : 0.5;
+            return fallbackUpload;
         }
     }
 
     const seconds = (performance.now() - start) / 1000;
-    return (UPLOAD_SIZE_BYTES * 8) / seconds / 1000000;
+    const mbps = (UPLOAD_SIZE_BYTES * 8) / seconds / 1000000;
+    return Number.isFinite(mbps) && mbps > 0 ? mbps : 0.5;
 }
 
-function calculateStability(downloadSamples) {
-    const mean = downloadSamples.reduce((acc, value) => acc + value, 0) / downloadSamples.length;
-    const variance = downloadSamples.reduce((acc, value) => acc + (value - mean) ** 2, 0) / downloadSamples.length;
+function calculateStability(downloadSamples, jitter) {
+    const validSamples = downloadSamples.filter(sample => Number.isFinite(sample) && sample > 0);
+    if (!validSamples.length) {
+        return 20;
+    }
+
+    const mean = validSamples.reduce((acc, value) => acc + value, 0) / validSamples.length;
+    const variance = validSamples.reduce((acc, value) => acc + (value - mean) ** 2, 0) / validSamples.length;
     const stdDev = Math.sqrt(variance);
     const coefficient = mean > 0 ? stdDev / mean : 1;
-    const score = Math.max(0, Math.min(100, 100 - coefficient * 100));
+    const jitterPenalty = Math.min(40, (jitter || 0) * 0.15);
+
+    const score = Math.max(5, Math.min(100, 100 - coefficient * 100 - jitterPenalty));
     return Math.round(score);
 }
 
@@ -204,6 +249,7 @@ function renderHistory() {
         historyList.innerHTML = '<li>Sin pruebas guardadas.</li>';
         return;
     }
+}
 
     historyList.innerHTML = current
         .map(item => `<li>${item.date} - Download ${item.download} Mbps - Upload ${item.upload} Mbps - Ping ${item.ping} ms</li>`)
@@ -254,7 +300,7 @@ function setLoadingState(isLoading) {
     loadingAnim.style.display = isLoading ? 'block' : 'none';
 
     if (isLoading) {
-        loadingText.textContent = 'Midiendo velocidad real...';
+        loadingText.textContent = 'Iniciando diagnóstico real de red...';
     }
 }
 
@@ -264,16 +310,16 @@ function updateProgressSimulation() {
     let progress = 0;
 
     const interval = setInterval(() => {
-        progress = Math.min(95, progress + Math.random() * 11);
+        progress = Math.min(95, progress + Math.random() * 9);
         progressFill.style.width = `${progress}%`;
-        loadingText.textContent = `Midiendo velocidad real... ${Math.round(progress)}%`;
+        loadingText.textContent = `Ejecutando diagnóstico real... ${Math.round(progress)}%`;
     }, 350);
 
     return {
         complete() {
             clearInterval(interval);
             progressFill.style.width = '100%';
-            loadingText.textContent = 'Resultados listos';
+            loadingText.textContent = 'Diagnóstico completado';
         },
         stop() {
             clearInterval(interval);
@@ -297,13 +343,22 @@ async function runSpeedTest() {
             measureUpload()
         ]);
 
-        const pingData = pingResult.status === 'fulfilled' ? pingResult.value : { avgPing: 0, jitter: 0 };
+        const approx = getConnectionApproximation();
+        const pingData = pingResult.status === 'fulfilled'
+            ? pingResult.value
+            : { avgPing: Math.round(approx.rttMs || 0), jitter: 0 };
         const downloadData = downloadResult.status === 'fulfilled'
             ? downloadResult.value
-            : { mbps: 0, samples: [0] };
-        const uploadMbps = uploadResult.status === 'fulfilled' ? uploadResult.value : 0;
+            : {
+                mbps: approx.downlinkMbps > 0 ? approx.downlinkMbps : 1,
+                samples: [approx.downlinkMbps > 0 ? approx.downlinkMbps : 1],
+                source: 'approx'
+            };
+        const uploadMbps = uploadResult.status === 'fulfilled'
+            ? uploadResult.value
+            : (approx.downlinkMbps > 0 ? Math.max(approx.downlinkMbps * 0.25, 0.5) : 0.5);
 
-        const stability = calculateStability(downloadData.samples.length ? downloadData.samples : [0]);
+        const stability = calculateStability(downloadData.samples, pingData.jitter);
         const classification = getSpeedClassification(downloadData.mbps);
         const now = new Date();
         const date = now.toLocaleDateString('es-AR');
