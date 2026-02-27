@@ -1,24 +1,34 @@
 // --- CONFIGURACIÓN DEL TEST ---
-// Archivo local que agregaste a la carpeta del proyecto (ruta relativa)
-const DOWNLOAD_TEST_URL = './test-download.bin';  // Cambia a './test-download.jpg' si es imagen
+// Archivo local en la carpeta del proyecto (ruta relativa)
+// Cambia a './test-download.jpg' si usas una imagen en lugar de bin
+const DOWNLOAD_TEST_URL = './test-download.bin';
 
-// Tamaño exacto del archivo en BYTES (ajusta según tu archivo descargado)
-const KNOWN_FILE_SIZE_BYTES = 104857600;  // 100 MB = 100 * 1024 * 1024
+// Tamaño exacto del archivo en BYTES (ajusta según tu archivo real)
+// 100 MB = 100 * 1024 * 1024 = 104857600 bytes
+const KNOWN_FILE_SIZE_BYTES = 104857600;
 
 // Número de iteraciones para descarga (más = más preciso, pero más lento)
 const DOWNLOAD_ITERATIONS = 3;
 
-// --- OBTENER IP, ISP Y UBICACIÓN (ya funciona) ---
+// --- OBTENER IP, ISP Y UBICACIÓN ---
 async function getUserConnectionInfo() {
     try {
-const response = await fetch('https://ip-api.com/json/');        const data = await response.json();
+        const response = await fetch('https://ip-api.com/json/');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+
         if (data.status === 'success') {
             document.getElementById('ip').textContent = data.query || 'No disponible';
             document.getElementById('isp').textContent = data.isp || 'No disponible';
-            document.getElementById('location').textContent = 
+            document.getElementById('location').textContent =
                 `${data.city || 'Desconocida'}, ${data.regionName || ''}, ${data.country || ''}`;
+        } else {
+            throw new Error(data.message || 'Fallo en la API');
         }
     } catch (e) {
+        console.error('Error al obtener info de conexión:', e);
         document.getElementById('ip').textContent = 'Error';
         document.getElementById('isp').textContent = 'Error';
         document.getElementById('location').textContent = 'Error';
@@ -31,14 +41,17 @@ async function measurePing() {
     for (let i = 0; i < 3; i++) {
         const start = performance.now();
         try {
-            await fetch('https://www.cloudflare.com/cdn-cgi/trace?' + Date.now(), { mode: 'no-cors', cache: 'no-store' });
-        } catch {}
+            await fetch('https://www.cloudflare.com/cdn-cgi/trace?' + Date.now(), {
+                mode: 'no-cors',
+                cache: 'no-store'
+            });
+        } catch {} // Ignorar errores silenciosamente
         total += performance.now() - start;
     }
     return Math.round(total / 3);
 }
 
-// --- MEDIR DESCARGA (usa tu archivo local → NO CORS en local ni en deploy) ---
+// --- MEDIR DESCARGA (usa archivo local en deploy → real) ---
 async function measureDownload() {
     let totalBits = 0;
     let totalTime = 0;
@@ -48,28 +61,36 @@ async function measureDownload() {
         try {
             const urlWithCacheBust = DOWNLOAD_TEST_URL + '?' + Date.now();
             const response = await fetch(urlWithCacheBust, { cache: 'no-store' });
-            if (!response.ok) throw new Error('Archivo no encontrado');
+            if (!response.ok) {
+                throw new Error(`Archivo no encontrado: ${response.status}`);
+            }
             const blob = await response.blob();
             const end = performance.now();
-            totalBits += KNOWN_FILE_SIZE_BYTES * 8;  // Usamos tamaño conocido (más preciso)
+            totalBits += KNOWN_FILE_SIZE_BYTES * 8;
             totalTime += (end - start) / 1000;
         } catch (e) {
             console.error('Error en iteración de descarga:', e);
         }
     }
 
-    if (totalTime < 0.1) return 'Muy rápida (prueba en deploy)';
+    if (totalTime < 0.1) {
+        return 'Muy rápida (prueba en deploy real)';
+    }
     return ((totalBits / totalTime) / 1000000).toFixed(2);
 }
 
-// --- MEDIR SUBIDA (dummy en local: solo mide tiempo de creación de datos) ---
+// --- MEDIR SUBIDA (dummy por ahora – solo mide creación de datos) ---
 function measureUpload() {
     const start = performance.now();
-    // Creamos datos dummy de 5 MB (no enviamos realmente en local para evitar errores)
+    // Datos dummy de 5 MB (no se envían realmente en esta versión)
     const dummy = new Uint8Array(5 * 1024 * 1024);
     const end = performance.now();
     const duration = (end - start) / 1000;
-    if (duration < 0.05) return 'N/A (local)';
+
+    if (duration < 0.05) {
+        return 'N/A (local)';
+    }
+
     const bits = 5 * 8 * 1024 * 1024;
     return ((bits / duration) / 1000000).toFixed(2);
 }
@@ -81,21 +102,26 @@ async function runSpeedTest() {
     const loadingText = document.getElementById('loading-text');
     const progressFill = document.querySelector('.progress-fill');
 
+    if (!btn || !loadingAnim || !loadingText || !progressFill) {
+        console.error('Faltan elementos HTML para la animación/test');
+        return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Probando...';
-    
+
     // Mostrar animación del cohete
     loadingAnim.style.display = 'block';
     progressFill.style.width = '0%'; // Reset progreso
 
-    // Simular progreso gradual (el cohete "sube" visualmente)
+    // Simular progreso gradual
     let progress = 0;
     const progressInterval = setInterval(() => {
-        progress += Math.random() * 15; // Avance irregular para que parezca real
+        progress += Math.random() * 15;
         if (progress > 100) progress = 100;
         progressFill.style.width = progress + '%';
         loadingText.textContent = `Probando... ${Math.round(progress)}% - ¡Acelerando!`;
-    }, 400); // Cada 0.4s avanza un poco
+    }, 400);
 
     try {
         // Limpiar resultados anteriores
@@ -107,18 +133,18 @@ async function runSpeedTest() {
         const download = await measureDownload();
         const upload = measureUpload();
 
-        // Detener simulación de progreso
+        // Detener simulación y finalizar animación
         clearInterval(progressInterval);
         progressFill.style.width = '100%';
         loadingText.textContent = '¡Llegamos a la meta! Resultados:';
 
-        // Animar cohete "lanzándose" hacia arriba
+        // Animar despegue final del cohete
         document.querySelector('.rocket').classList.add('rocket-launched');
 
-        // Esperar 1.5s para que se vea la animación final
+        // Esperar para que se vea la animación
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Mostrar resultados reales
+        // Mostrar resultados
         document.getElementById('ping').textContent = ping;
         document.getElementById('download').textContent = download;
         document.getElementById('upload').textContent = upload;
@@ -131,7 +157,7 @@ async function runSpeedTest() {
         loadingText.textContent = 'Error en la prueba 😔';
         btn.textContent = 'Reintentar';
     } finally {
-        // Ocultar animación después de 3 segundos más (para ver el cohete desaparecer)
+        // Ocultar animación después de unos segundos
         setTimeout(() => {
             loadingAnim.style.display = 'none';
             document.querySelector('.rocket').classList.remove('rocket-launched');
@@ -142,6 +168,11 @@ async function runSpeedTest() {
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('load', () => {
-    getUserConnectionInfo();  // IP/ISP al cargar
-    document.getElementById('start-test').addEventListener('click', runSpeedTest);
+    getUserConnectionInfo(); // Cargar IP/ISP/ubicación al inicio
+    const startButton = document.getElementById('start-test');
+    if (startButton) {
+        startButton.addEventListener('click', runSpeedTest);
+    } else {
+        console.error('Botón #start-test no encontrado');
+    }
 });
