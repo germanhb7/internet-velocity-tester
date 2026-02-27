@@ -365,3 +365,40 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
+/* ================================================
+   ESTILOS PARA SWEETALERT (agregados ahora)
+   ================================================ */
+.swal-wide {
+    max-width: 640px !important; /* un poco más ancho para que el texto respire */
+    padding: 2rem !important;
+    border-radius: 16px !important;
+}
+
+.swal-title-custom {
+    font-size: 1.8rem !important;
+    color: var(--primary) !important;
+    margin-bottom: 1.2rem !important;
+    font-weight: 700 !important;
+}
+
+.swal-content-custom {
+    line-height: 1.7 !important;
+    color: var(--text) !important;
+    font-size: 1.05rem !important;
+}
+
+.swal2-popup .swal2-confirm {
+    background-color: var(--primary) !important;
+    border-radius: 999px !important;
+    padding: 0.75rem 2rem !important;
+    font-weight: 600 !important;
+}
+
+.swal2-popup .swal2-confirm:hover {
+    background-color: var(--primary-dark) !important;
+}
+
+.swal2-icon {
+    margin-bottom: 1rem !important;
+}

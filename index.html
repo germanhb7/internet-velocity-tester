@@ -19,6 +19,10 @@
     <meta name="twitter:title" content="Internet Speed Tester Gratis">
     <meta name="twitter:description" content="Diagnóstico de red con descarga, subida, ping y estabilidad.">
 
+    <!-- SweetAlert2 CDN - necesario para las alertas bonitas al finalizar el test -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
     <script src="share-modal.js" defer></script>
@@ -119,10 +123,27 @@
             </ul>
         </section>
 
-        <section id="contact-section">
-            <h2>📩 Asesoramiento para mejorar internet en Windows</h2>
-            <p>Contacto: <a class="contact-link" href="mailto:germanbarreto77@gmail.com">germanbarreto77@gmail.com</a></p>
-        </section>
+<section id="contact-section">
+    <h2>📩 ¿Querés mejorar tu internet en Windows?</h2>
+    <p style="text-align: center; margin-bottom: 1.5rem; color: #334155;">
+        Te ayudo gratis a optimizar tu conexión: router, drivers, DNS, Wi-Fi, etc.
+    </p>
+    
+    <!-- Botón que abre Gmail directamente en una pestaña nueva -->
+    <a 
+        href="https://mail.google.com/mail/?view=cm&fs=1&to=germanbarreto77@gmail.com&su=Quiero%20asesoramiento%20para%20mejorar%20mi%20internet%20en%20mi%20PC&body=Hola%20German,%0A%0AQuiero%20mejorar%20la%20velocidad%20y%20estabilidad%20de%20mi%20conexión%20en%20mi%20PC%20con%20Windows.%0A%0AMis%20resultados%20del%20test%20son:%0A- Descarga:%20[pegá%20aquí%20tu%20velocidad%20de%20descarga]%20Mbps%0A- Subida:%20[pegá%20aquí%20tu%20velocidad%20de%20subida]%20Mbps%0A- Ping:%20[pegá%20aquí%20tu%20ping]%20ms%0A- Estabilidad:%20[pegá%20aquí%20tu%20estabilidad]%%%0A%0AMi%20proveedor%20es:%20[tu%20proveedor]%0AEstoy%20usando:%20[Wi-Fi%20o%20cable]%0A%0AMi%20problema%20principal%20es:%20[ej:%20juegos%20laggean,%20videos%20se%20cortan,%20subidas%20lentas]%0A%0AGracias%20por%20tu%20ayuda!"
+        target="_blank"
+        rel="noopener noreferrer"
+    >
+        <button class="secondary-btn" style="font-size: 1.2rem; padding: 1rem 2.5rem; width: auto; margin: 0 auto; display: block;">
+            Pedir asesoramiento personalizado por Gmail
+        </button>
+    </a>
+
+    <p style="text-align: center; margin-top: 1rem; font-size: 0.9rem; color: #64748b;">
+        Se abrirá una pestaña nueva en Gmail con un mensaje listo para completar y enviar.
+    </p>
+</section>
     </main>
 
     <div id="share-modal" class="share-modal" aria-hidden="true" role="dialog" aria-labelledby="share-title">
@@ -136,8 +157,9 @@
         </div>
     </div>
 
+    <!-- Footer con año dinámico (siempre muestra el año actual) -->
     <footer>
-        <p>&copy; 2024 Internet Velocity Tester - Hecho para todos los usuarios</p>
+        <p>© <script>document.write(new Date().getFullYear());</script> Internet Velocity Tester - Hecho para todos los usuarios</p>
     </footer>
 </body>
 </html>

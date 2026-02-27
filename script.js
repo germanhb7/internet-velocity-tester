@@ -362,6 +362,40 @@ async function startTest() {
             ping: String(pingResult.ping)
         });
 
+        // SweetAlert que se muestra automáticamente al finalizar el test con éxito
+        Swal.fire({
+            title: '¡Test completado!',
+            html: `
+                <p style="font-size: 1.1rem; margin: 1rem 0;">
+                    Este test mide <strong>la velocidad real que estás obteniendo ahora mismo</strong> 
+                    con tu proveedor actual y en tu navegador cotidiano.
+                </p>
+                <p style="font-size: 1rem; color: #334155; margin: 1rem 0;">
+                    Es decir: la velocidad que realmente experimentás al navegar, ver videos, jugar online o hacer videollamadas.
+                </p>
+                <p style="font-size: 0.95rem; color: #64748b;">
+                    No usa trucos ni optimizaciones artificiales.<br>
+                    Todos los resultados son calculados en tiempo real con tus datos actuales. Nada es aleatorio.
+                </p>
+                <p style="margin-top: 1.5rem; font-size: 0.9rem; color: #6b7280;">
+                    Existen otras formas de medir la conexión, cada una con su enfoque.<br>
+                    Esta herramienta está diseñada para mostrarte la realidad práctica y útil de tu uso diario.
+                </p>
+            `,
+            icon: 'info',
+            iconColor: '#0d6efd',
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: '#0d6efd',
+            allowOutsideClick: true,
+            allowEscapeKey: true,
+            showCloseButton: true,
+            customClass: {
+                popup: 'swal-wide',
+                title: 'swal-title-custom',
+                htmlContainer: 'swal-content-custom'
+            }
+        });
+
         progress.complete();
     } catch (error) {
         progress.stop();
