@@ -2,10 +2,6 @@
 const HISTORY_KEY = 'internetVelocityHistory';
 const LIBRESPEED_GARBAGE = 'https://librespeed.org/backend/garbage.php';
 const LIBRESPEED_EMPTY = 'https://librespeed.org/backend/empty.php';
-const CORS_PROXIES = [
-    (url) => `https://cors.isomorphic-git.org/${url}`,
-    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-];
 const DOWNLOAD_BYTES_SAMPLES = [500000, 1000000, 2000000];
 const UPLOAD_SIZE_BYTES = 1024 * 1024; // 1MB
 
@@ -163,21 +159,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
     }
 }
 
-async function requestWithCorsFallback(baseUrl, options = {}, timeoutMs = 12000) {
-    try {
-        return await fetchWithTimeout(baseUrl, options, timeoutMs);
-    } catch {
-        for (const makeProxyUrl of CORS_PROXIES) {
-            try {
-                return await fetchWithTimeout(makeProxyUrl(baseUrl), options, timeoutMs);
-            } catch {
-                // Probar siguiente proxy.
-            }
-        }
-        throw new Error('Request failed with all CORS fallbacks');
-    }
-}
-
 async function measureDownload() {
     const samples = [];
 
@@ -187,22 +168,20 @@ async function measureDownload() {
         const start = performance.now();
 
         try {
-            const response = await fetchWithTimeout(testUrl, { cache: 'no-store' }, 4000);
-            if (!response.ok) {
-                throw new Error('Download test failed');
-            }
+            await fetchWithTimeout(testUrl, {
+                mode: 'no-cors',
+                cache: 'no-store'
+            }, 5000);
 
-            const buffer = await response.arrayBuffer();
             const duration = (performance.now() - start) / 1000;
-            const measuredBytes = buffer.byteLength || bytes;
-            const mbps = (measuredBytes * 8) / duration / 1000000;
+            const mbps = (bytes * 8) / duration / 1000000;
             if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
         } catch {
             // Intento con siguiente muestra.
         }
     }
 
-    // Fallback robusto si LibreSpeed falla por CORS/región.
+    // Fallback robusto si LibreSpeed falla por red/región.
     if (!samples.length) {
         const fallbackUrl = `./test-download.bin?cacheBust=${Date.now()}`;
         const start = performance.now();
@@ -223,20 +202,19 @@ async function measureDownload() {
 async function measureUpload() {
     const blob = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
 
-    // 1) Intento principal: LibreSpeed
+    // 1) Intento principal: LibreSpeed no-cors (medición por tiempo de subida del payload).
     const startDirect = performance.now();
     try {
-        const directRes = await fetchWithTimeout(`${LIBRESPEED_GARBAGE}?cacheBust=${Date.now()}`, {
+        await fetchWithTimeout(`${LIBRESPEED_GARBAGE}?cacheBust=${Date.now()}`, {
             method: 'POST',
             body: blob,
+            mode: 'no-cors',
             cache: 'no-store'
         }, 6000);
 
-        if (directRes.ok) {
-            const duration = (performance.now() - startDirect) / 1000;
-            const mbps = (UPLOAD_SIZE_BYTES * 8) / duration / 1000000;
-            if (Number.isFinite(mbps) && mbps > 0) return mbps;
-        }
+        const duration = (performance.now() - startDirect) / 1000;
+        const mbps = (UPLOAD_SIZE_BYTES * 8) / duration / 1000000;
+        if (Number.isFinite(mbps) && mbps > 0) return mbps;
     } catch {
         // continua
     }
