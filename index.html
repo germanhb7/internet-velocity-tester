@@ -3,56 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Internet Velocity Tester - Test de Velocidad de Internet Gratis</title>
-    <meta name="description" content="Mide tu velocidad de internet en Concordia, Entre Ríos. Detecta IP, ISP automáticamente y prueba descarga/subida.">
+    <title>Internet Speed Tester Gratis | Test de Velocidad de Internet en Argentina</title>
+    <meta name="description" content="Internet speed tester gratis: mide descarga, subida, ping, jitter y estabilidad en segundos.">
+    <meta name="keywords" content="internet tester, internet speed tester, test de velocidad, ping, jitter, velocidad internet argentina">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://internet-velocity-tester.netlify.app/">
+
+    <meta property="og:title" content="Internet Speed Tester Gratis">
+    <meta property="og:description" content="Medí tu velocidad de internet con datos claros y reales.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="es_AR">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Internet Speed Tester Gratis">
+    <meta name="twitter:description" content="Diagnóstico de red con descarga, subida, ping y estabilidad.">
+
     <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
 </head>
 <body>
     <header>
-        <h1>Internet Velocity Tester</h1>
-        <p>Testea tu velocidad de internet de forma gratuita y precisa</p>
+        <h1>Test de velocidad de internet gratis</h1>
+        <p>Diagnóstico real de red para uso diario, gaming y entrevistas</p>
     </header>
 
     <main>
-        <section id="info-section">
-            <h2>Información de tu conexión</h2>
-            <p>Tu IP: <span id="ip">Cargando...</span></p>
-            <p>Tu proveedor (ISP): <span id="isp">Cargando...</span></p>
-            <p>Ubicación aproximada: <span id="location">Cargando...</span></p>
+        <section id="connection-section">
+            <h2>Tu conexión actual</h2>
+            <div class="connection-grid">
+                <p>IP: <span id="ip">Cargando...</span></p>
+                <p>Proveedor (ISP): <span id="isp">Cargando...</span></p>
+                <p>Ciudad: <span id="city">Cargando...</span></p>
+                <p>País: <span id="country">Cargando...</span></p>
+                <p>ASN: <span id="asn">Cargando...</span></p>
+            </div>
         </section>
 
         <section id="test-section">
             <h2>Prueba de velocidad</h2>
-            <button id="start-test">INICIAR TEST</button>
-            <div id="results">
-                <p>Ping: <span id="ping">---</span> ms</p>
-                <p>Descarga: <span id="download">---</span> Mbps</p>
-                <p>Subida: <span id="upload">---</span> Mbps</p>
+
+            <div class="actions-grid">
+                <button id="start-test">INICIAR TEST</button>
+                <button id="interview-mode" class="secondary-btn">Modo entrevista</button>
             </div>
+
+            <button id="back-home" class="secondary-btn" hidden>⬅ Volver al inicio</button>
+
+            <div id="loading-animation" style="display: none;">
+                <p id="loading-text">Iniciando diagnóstico...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="results" class="results-grid" aria-live="polite">
+                <p class="result-card show-interview">
+                    <span class="metric-label">⬇ Descarga</span>
+                    <span id="download" class="metric-value">---</span>
+                    <span class="metric-unit">Mbps</span>
+                    <span id="speed-class" class="metric-note">Sin clasificación</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">⬆ Subida</span>
+                    <span id="upload" class="metric-value">---</span>
+                    <span class="metric-unit">Mbps</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">🎮 Ping</span>
+                    <span id="ping" class="metric-value">---</span>
+                    <span class="metric-unit">ms</span>
+                </p>
+
+                <p class="result-card show-interview">
+                    <span class="metric-label">🛰 ISP</span>
+                    <span id="isp-result" class="metric-value metric-value-small">---</span>
+                    <span class="metric-unit">Proveedor</span>
+                </p>
+
+                <p class="result-card">
+                    <span class="metric-label">📶 Estabilidad</span>
+                    <span id="stability" class="metric-value">---</span>
+                    <span class="metric-unit">%</span>
+                </p>
+            </div>
+
+            <div class="details-row">
+                <p>Ping promedio: <strong id="avg-ping">---</strong> ms</p>
+                <p>Jitter: <strong id="jitter">---</strong> ms</p>
+            </div>
+
+            <div id="gauge" class="gauge-wrap" aria-label="Velocímetro de descarga">
+                <div class="gauge-track"></div>
+                <div id="gauge-needle" class="gauge-needle"></div>
+                <div id="gauge-value" class="gauge-value">0 Mbps</div>
+            </div>
+
+            <button id="copy-result" class="secondary-btn">COPIAR RESULTADO PARA ENTREVISTA</button>
         </section>
 
-        <section id="premium-teaser">
-            <h2>¿Querés más velocidad?</h2>
-            <p>Accedé a consejos premium para optimizar tu Windows y sacar el máximo de tu conexión.</p>
-            <button>Ver consejos premium (próximamente)</button>
+        <section id="history-section">
+            <h2>📈 Historial de velocidad</h2>
+            <ul id="history-list">
+                <li>Sin pruebas guardadas.</li>
+            </ul>
         </section>
 
-        <div id="loading-animation" style="display: none; text-align: center; margin: 2rem 0;">
-    <div class="rocket-container">
-        <div class="rocket">🚀</div>
-        <div class="flame">🔥</div>
-        <div class="progress-bar">
-            <div class="progress-fill"></div>
-        </div>
-        <p id="loading-text">Probando tu velocidad... ¡Despegue!</p>
-    </div>
-</div>
+        <section id="contact-section">
+            <h2>📩 Asesoramiento para mejorar internet en Windows</h2>
+            <p>Contacto: <a class="contact-link" href="mailto:germanbarreto77@gmail.com">germanbarreto77@gmail.com</a></p>
+        </section>
     </main>
 
     <footer>
-        <p>&copy; 2026 Internet Velocity Tester - Hecho para todds los usuarios</p>
+        <p>&copy; 2026 Internet Velocity Tester - Hecho para todos los usuarios</p>
     </footer>
-
-    <script src="script.js"></script>
 </body>
 </html>
