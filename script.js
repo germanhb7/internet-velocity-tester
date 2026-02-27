@@ -1,12 +1,7 @@
 // Configuración principal
 const HISTORY_KEY = 'internetVelocityHistory';
-const DOWNLOAD_TEST_URL = 'https://httpbin.org/bytes/';  // AWS global para download
-const UPLOAD_TEST_URL = 'https://httpbin.org/post';      // AWS global para upload
-const PING_TEST_URL = 'https://httpbin.org/get';         // AWS global para ping
-const FALLBACK_PING_URL = 'https://www.cloudflare.com/cdn-cgi/trace';  // Cloudflare fallback global
-const FALLBACK_DOWNLOAD_FILE = './test-download-5mb.bin';  // Opcional: Sube a Netlify para fallback (genera con dd if=/dev/urandom of=test-download-5mb.bin bs=1M count=5)
-const DOWNLOAD_BYTES_SAMPLES = [500000, 1000000, 2000000];
-const UPLOAD_SIZE_BYTES = 1024 * 1024; // 1MB
+const DOWNLOAD_BYTES_SAMPLES = [500000, 1000000, 2000000]; // Mantengo por si fallback, pero no se usa con ndt7
+const UPLOAD_SIZE_BYTES = 1024 * 1024; // Mismo
 
 let userCountry = 'No disponible';
 let userISP = 'No disponible';
@@ -128,16 +123,15 @@ async function fetchConnectionData() {
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
     const apis = [
-        'https://ipapi.co/json/',          // Primaria, ya funciona
-        'https://ipwho.is/',               // Fallback global
-        'https://freeipapi.com/api/json'   // Otro fallback
+        'https://ipapi.co/json/',
+        'https://ipwho.is/',
+        'https://freeipapi.com/api/json'
     ];
 
     for (const api of apis) {
         try {
-            const res = await fetchWithTimeout(api, {}, 5000);
+            const res = await fetch(api);
             const data = await res.json();
-            // Normaliza keys para compatibilidad
             ipElement.textContent = data.ip || data.ipAddress || 'No disponible';
             ispElement.textContent = data.org || data.connection?.org || data.ispName || 'No disponible';
             cityElement.textContent = data.city || data.cityName || 'No disponible';
@@ -150,12 +144,11 @@ async function fetchConnectionData() {
             const ispResult = document.getElementById('isp-result');
             if (ispResult) ispResult.textContent = userISP;
 
-            return;  // Éxito, no continuamos con fallbacks
+            return;
         } catch (error) {
             console.warn(`IP API ${api} failed: ${error.message}`);
         }
     }
-    // Si todos fallan (raro)
     ipElement.textContent = 'No disponible';
     ispElement.textContent = 'No disponible';
     cityElement.textContent = 'No disponible';
@@ -163,96 +156,58 @@ async function fetchConnectionData() {
     asnElement.textContent = 'No disponible';
 }
 
-async function measureDownload() {
-    const samples = [];
+async function runSpeedTest() {
+    return new Promise((resolve, reject) => {
+        let downloadMbps = 0;
+        let uploadMbps = 0;
+        let ping = 0;
+        let jitter = 0;
+        let downloadSamples = [];
+        let uploadSamples = [];
 
-    for (let i = 0; i < DOWNLOAD_BYTES_SAMPLES.length; i += 1) {
-        const bytes = DOWNLOAD_BYTES_SAMPLES[i];
-        const testUrl = `${DOWNLOAD_TEST_URL}${bytes}?seed=${Date.now()}-${i}`;
-        const start = performance.now();
+        const testConfig = {
+            protocol: 'wss',
+            metadata: {
+                client_name: 'internet-velocity-tester',
+                client_version: '1.0.0',
+                userAcceptedDataPolicy: true  // Aceptamos la política de M-Lab para datos reales
+            }
+        };
 
-        try {
-            const response = await fetchWithTimeout(testUrl, {
-                cache: 'no-store'
-            }, 10000);
+        const testCallbacks = {
+            error: (err) => {
+                console.error('NDT7 error:', err);
+                reject(err);
+            },
 
-            if (!response.ok) throw new Error(`Download HTTP error: ${response.status}`);
+            downloadStart: () => setLoadingState(true, 'Midiendo descarga...'),
+            downloadMeasurement: ({ source, data }) => {
+                if (source === 'client') {
+                    const mbps = data.MeanClientMbps;
+                    if (mbps > 0) downloadSamples.push(mbps);
+                }
+            },
+            downloadComplete: ({ lastClientMeasurement, lastServerMeasurement }) => {
+                downloadMbps = lastClientMeasurement.MeanClientMbps || 0;
+                ping = lastServerMeasurement.MinRTT || 0;  // RTT como ping
+                jitter = lastServerMeasurement.LossRate * 100 || 0;  // Aproximación de jitter basada en loss
+            },
 
-            const buffer = await response.arrayBuffer();
-            const duration = (performance.now() - start) / 1000;
-            const mbps = (buffer.byteLength * 8) / duration / 1000000;
-            if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
-        } catch (error) {
-            console.error(`Download sample ${i} failed: ${error.message}`);
-        }
-    }
+            uploadStart: () => setLoadingState(true, 'Midiendo subida...'),
+            uploadMeasurement: ({ source, data }) => {
+                if (source === 'client') {
+                    const mbps = data.MeanClientMbps;
+                    if (mbps > 0) uploadSamples.push(mbps);
+                }
+            },
+            uploadComplete: ({ lastClientMeasurement, lastServerMeasurement }) => {
+                uploadMbps = lastClientMeasurement.MeanClientMbps || 0;
+                resolve({ downloadMbps, uploadMbps, ping, jitter, downloadSamples, uploadSamples });
+            }
+        };
 
-    // Fallback opcional si subes el archivo
-    if (!samples.length && FALLBACK_DOWNLOAD_FILE) {
-        try {
-            const start = performance.now();
-            const response = await fetchWithTimeout(FALLBACK_DOWNLOAD_FILE, { cache: 'no-store' }, 10000);
-            if (!response.ok) throw new Error('Fallback download failed');
-            const buffer = await response.arrayBuffer();
-            const duration = (performance.now() - start) / 1000;
-            const mbps = (buffer.byteLength * 8) / duration / 1000000;
-            if (Number.isFinite(mbps) && mbps > 0) samples.push(mbps);
-        } catch (error) {
-            console.error(`Download fallback failed: ${error.message}`);
-        }
-    }
-
-    const average = samples.reduce((acc, value) => acc + value, 0) / samples.length || 0;
-    return { average, samples };
-}
-
-async function measureUpload() {
-    const blob = new Blob([new Uint8Array(UPLOAD_SIZE_BYTES)], { type: 'application/octet-stream' });
-
-    const start = performance.now();
-    try {
-        const response = await fetchWithTimeout(UPLOAD_TEST_URL, {
-            method: 'POST',
-            body: blob,
-            cache: 'no-store'
-        }, 10000);
-
-        if (!response.ok) throw new Error(`Upload HTTP error: ${response.status}`);
-
-        const duration = (performance.now() - start) / 1000;
-        const mbps = (UPLOAD_SIZE_BYTES * 8) / duration / 1000000;
-        if (Number.isFinite(mbps) && mbps > 0) return mbps;
-    } catch (error) {
-        console.error(`Upload failed: ${error.message}`);
-    }
-
-    return 0;
-}
-
-async function measurePingAndJitter() {
-    const samples = [];
-
-    for (let i = 0; i < 5; i += 1) {
-        const start = performance.now();
-        const url = i % 2 === 0 ? `${PING_TEST_URL}?cacheBust=${Date.now()}-${i}` : `${FALLBACK_PING_URL}?cacheBust=${Date.now()}-${i}`;
-        try {
-            await fetchWithTimeout(url, {
-                cache: 'no-store'
-            }, 2500);
-        } catch (error) {
-            console.error(`Ping sample ${i} failed: ${error.message}`);
-        }
-        samples.push(performance.now() - start);
-    }
-
-    const avg = samples.reduce((acc, value) => acc + value, 0) / samples.length || 0;
-    const deltas = samples.slice(1).map((value, idx) => Math.abs(value - samples[idx]));
-    const jitter = deltas.length ? deltas.reduce((acc, value) => acc + value, 0) / deltas.length : 0;
-
-    return {
-        ping: Math.round(avg),
-        jitter: Math.round(jitter)
-    };
+        ndt7.test(testConfig, testCallbacks);
+    });
 }
 
 function calculateStability(samples) {
@@ -305,53 +260,47 @@ async function startTest() {
     const startButton = document.getElementById('start-test');
     if (!startButton) return;
 
+    // Pedir confirmación para "permiso" – explica que usa M-Lab y mide real
+    const confirm = await Swal.fire({
+        title: '¿Iniciar test real?',
+        text: 'Este test usa servidores profesionales de Measurement Lab (M-Lab) para medir tu conexión real. Los datos anónimos contribuyen a estudios públicos de internet. ¿Aceptas?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, iniciar',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!confirm.isConfirmed) return;
+
     startButton.disabled = true;
     startButton.textContent = 'Midiendo...';
-    setLoadingState(true, 'Iniciando diagnóstico de red...');
+    setLoadingState(true, 'Iniciando diagnóstico real con M-Lab...');
     const progress = updateProgressSimulation();
 
     try {
-        const pingResult = await measurePingAndJitter();
-        document.getElementById('ping').textContent = String(pingResult.ping);
-        document.getElementById('avg-ping').textContent = String(pingResult.ping);
-        document.getElementById('jitter').textContent = String(pingResult.jitter);
+        const { downloadMbps, uploadMbps, ping, jitter, downloadSamples, uploadSamples } = await runSpeedTest();
 
-        const [downloadSettled, uploadSettled] = await Promise.allSettled([
-            measureDownload(),
-            measureUpload()
-        ]);
+        document.getElementById('ping').textContent = String(ping);
+        document.getElementById('avg-ping').textContent = String(ping);
+        document.getElementById('jitter').textContent = String(jitter);
 
-        let downloadMbps = 0;
-        let uploadMbps = 0;
-        let stability = 0;
-
-        if (downloadSettled.status === 'fulfilled') {
-            downloadMbps = downloadSettled.value.average;
-            stability = calculateStability(downloadSettled.value.samples);
-            document.getElementById('speed-class').textContent = getSpeedClassification(downloadMbps);
-            updateGauge(downloadMbps);
-        } else {
-            document.getElementById('speed-class').textContent = 'No disponible';
-            updateGauge(0);
-        }
-
-        if (uploadSettled.status === 'fulfilled') {
-            uploadMbps = uploadSettled.value;
-        }
+        const stability = calculateStability([...downloadSamples, ...uploadSamples]);  // Combinado para estabilidad general
 
         document.getElementById('download').textContent = formatNumber(downloadMbps);
         document.getElementById('upload').textContent = formatNumber(uploadMbps);
         document.getElementById('stability').textContent = String(stability);
         document.getElementById('isp-result').textContent = userISP;
+        document.getElementById('speed-class').textContent = getSpeedClassification(downloadMbps);
+        updateGauge(downloadMbps);
 
         saveHistory({
             date: new Date().toLocaleDateString('es-AR'),
             download: formatNumber(downloadMbps),
             upload: formatNumber(uploadMbps),
-            ping: String(pingResult.ping)
+            ping: String(ping)
         });
 
-        // SweetAlert que se muestra automáticamente al finalizar el test con éxito
+        // SweetAlert original al finalizar
         Swal.fire({
             title: '¡Test completado!',
             html: `
@@ -401,22 +350,6 @@ async function startTest() {
         setTimeout(() => setLoadingState(false), 800);
         startButton.disabled = false;
         startButton.textContent = 'Volver a testear';
-    }
-}
-
-async function fetchWithTimeout(url, options = {}, timeout = 5000) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        if (error.name === 'AbortError') {
-            throw new Error('Request timed out');
-        }
-        throw error;
     }
 }
 
