@@ -125,10 +125,11 @@ async function fetchConnectionData() {
     if (!ipElement || !ispElement || !cityElement || !countryElement || !asnElement) return;
 
     try {
-        const res = await fetch('https://ipwho.is/');
-        const data = await res.json();
+        // ---------- API 1 ----------
+        let res = await fetch('https://ipwho.is/');
+        let data = await res.json();
 
-        if (!data.success) throw new Error('API error');
+        if (!data.success) throw new Error('API1 failed');
 
         ipElement.textContent = data.ip || 'No disponible';
         ispElement.textContent = data.connection?.isp || 'No disponible';
@@ -139,17 +140,32 @@ async function fetchConnectionData() {
         userCountry = data.country || 'No disponible';
         userISP = data.connection?.isp || 'No disponible';
 
-        const ispResult = document.getElementById('isp-result');
-        if (ispResult) ispResult.textContent = userISP;
+    } catch (e) {
+        try {
+            // ---------- API 2 fallback ----------
+            let res = await fetch('https://ipapi.is/json/');
+            let data = await res.json();
 
-    } catch (error) {
-        ipElement.textContent = 'No disponible';
-        ispElement.textContent = 'No disponible';
-        cityElement.textContent = 'No disponible';
-        countryElement.textContent = 'No disponible';
-        asnElement.textContent = 'No disponible';
-        console.error('IP fetch error:', error);
+            ipElement.textContent = data.ip || 'No disponible';
+            ispElement.textContent = data.company || 'No disponible';
+            cityElement.textContent = data.city || 'No disponible';
+            countryElement.textContent = data.country || 'No disponible';
+            asnElement.textContent = data.asn || 'No disponible';
+
+            userCountry = data.country || 'No disponible';
+            userISP = data.company || 'No disponible';
+
+        } catch {
+            ipElement.textContent = 'No disponible';
+            ispElement.textContent = 'No disponible';
+            cityElement.textContent = 'No disponible';
+            countryElement.textContent = 'No disponible';
+            asnElement.textContent = 'No disponible';
+        }
     }
+
+    const ispResult = document.getElementById('isp-result');
+    if (ispResult) ispResult.textContent = userISP;
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
