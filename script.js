@@ -113,6 +113,22 @@ function updateProgressSimulation() {
     };
 }
 
+async function fetchWithTimeout(url, options = {}, timeout = 5000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out');
+        }
+        throw error;
+    }
+}
+
 async function fetchConnectionData() {
     const ipElement = document.getElementById('ip');
     const ispElement = document.getElementById('isp');
@@ -125,21 +141,23 @@ async function fetchConnectionData() {
     const apis = [
         'https://ipapi.co/json/',
         'https://ipwho.is/',
-        'https://freeipapi.com/api/json'
+        'https://freeipapi.com/api/json',
+        'https://ipinfo.io/json'  // Extra para robustez, gratuita y confiable
     ];
 
     for (const api of apis) {
         try {
-            const res = await fetch(api);
+            const res = await fetchWithTimeout(api, { mode: 'cors', cache: 'no-cache' });
+            if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
             const data = await res.json();
             ipElement.textContent = data.ip || data.ipAddress || 'No disponible';
-            ispElement.textContent = data.org || data.connection?.org || data.ispName || 'No disponible';
+            ispElement.textContent = data.org || data.connection?.org || data.ispName || data.isp || 'No disponible';
             cityElement.textContent = data.city || data.cityName || 'No disponible';
             countryElement.textContent = data.country_name || data.countryName || data.country || 'No disponible';
             asnElement.textContent = data.asn || data.connection?.asn || data.asNumber || 'No disponible';
 
             userCountry = data.country_name || data.countryName || data.country || 'No disponible';
-            userISP = data.org || data.connection?.org || data.ispName || 'No disponible';
+            userISP = data.org || data.connection?.org || data.ispName || data.isp || 'No disponible';
 
             const ispResult = document.getElementById('isp-result');
             if (ispResult) ispResult.textContent = userISP;
@@ -149,6 +167,7 @@ async function fetchConnectionData() {
             console.warn(`IP API ${api} failed: ${error.message}`);
         }
     }
+    // Defaults si todos fallan
     ipElement.textContent = 'No disponible';
     ispElement.textContent = 'No disponible';
     cityElement.textContent = 'No disponible';
